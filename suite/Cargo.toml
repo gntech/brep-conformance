@@ -1,0 +1,13 @@
+[package]
+name = "brep-conformance"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "A kernel-neutral conformance suite for B-rep operations: cases, oracles, runner"
+publish = false
+
+# crates.io dependencies and the protocol beside it only: the suite must build outside this
+# repository.
+[dependencies]
+brep-protocol = { path = "../protocol" }
+serde_json = "1"

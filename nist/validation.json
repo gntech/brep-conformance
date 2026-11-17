@@ -1,0 +1,100 @@
+{
+ "ap203-pmi/nist_ctc_01_asme1_ap203.stp": {
+  "area": 807968.623428625,
+  "area_unit": "mm",
+  "volume": 14642797.5186875,
+  "volume_unit": "mm"
+ },
+ "ap203-pmi/nist_ctc_02_asme1_ap203.stp": {},
+ "ap203-pmi/nist_ctc_03_asme1_ap203.stp": {
+  "area": 354978.6053694487,
+  "area_unit": "inch",
+  "volume": 331938.2591751127,
+  "volume_unit": "inch"
+ },
+ "ap203-pmi/nist_ctc_04_asme1_ap203.stp": {},
+ "ap203-pmi/nist_ctc_05_asme1_ap203.stp": {
+  "area": 861243.0176299132,
+  "area_unit": "inch",
+  "volume": 12694920.724252122,
+  "volume_unit": "inch"
+ },
+ "ap203/nist_ctc_01_asme1_rd.stp": {},
+ "ap203/nist_ctc_02_asme1_rc.stp": {
+  "area": 2481847.636045,
+  "area_unit": "mm",
+  "volume": 47101527.47498,
+  "volume_unit": "mm"
+ },
+ "ap203/nist_ctc_03_asme1_rc.stp": {},
+ "ap203/nist_ctc_04_asme1_rd.stp": {},
+ "ap203/nist_ctc_05_asme1_rd.stp": {
+  "area": 861242.9165391091,
+  "area_unit": "inch",
+  "volume": 12694914.68692222,
+  "volume_unit": "inch"
+ },
+ "ap203/nist_ftc_06_asme1_rd.stp": {},
+ "ap203/nist_ftc_07_asme1_rd.stp": {},
+ "ap203/nist_ftc_08_asme1_rc.stp": {},
+ "ap203/nist_ftc_09_asme1_rd.stp": {
+  "area": 96614.23380695238,
+  "area_unit": "inch",
+  "volume": 136445.10481135413,
+  "volume_unit": "inch"
+ },
+ "ap203/nist_ftc_10_asme1_rb.stp": {},
+ "ap203/nist_ftc_11_asme1_rb.stp": {},
+ "ap242/nist_ctc_01_asme1_ap242-e1.stp": {
+  "volume": 14644822.6361138,
+  "volume_unit": "mm"
+ },
+ "ap242/nist_ctc_02_asme1_ap242-e2.stp": {
+  "volume": 47106788.0321802,
+  "volume_unit": "mm"
+ },
+ "ap242/nist_ctc_03_asme1_ap242-e2.stp": {
+  "volume": 332122.9076263,
+  "volume_unit": "mm"
+ },
+ "ap242/nist_ctc_04_asme1_ap242-e1.stp": {
+  "area": 1022497.095954,
+  "area_unit": "mm",
+  "volume": 17519780.220394,
+  "volume_unit": "mm"
+ },
+ "ap242/nist_ctc_05_asme1_ap242-e1.stp": {},
+ "ap242/nist_ftc_06_asme1_ap242-e2.stp": {
+  "volume": 3323556.50526143,
+  "volume_unit": "mm"
+ },
+ "ap242/nist_ftc_07_asme1_ap242-e2.stp": {
+  "area": 391371.39402984,
+  "area_unit": "inch",
+  "volume": 1726247.5707237597,
+  "volume_unit": "inch"
+ },
+ "ap242/nist_ftc_08_asme1_ap242-e1-tg.stp": {},
+ "ap242/nist_ftc_08_asme1_ap242-e2.stp": {},
+ "ap242/nist_ftc_09_asme1_ap242-e1.stp": {},
+ "ap242/nist_ftc_10_asme1_ap242-e2.stp": {},
+ "ap242/nist_ftc_11_asme1_ap242-e2.stp": {},
+ "ap242/nist_stc_06_asme1_ap242-e3.stp": {},
+ "ap242/nist_stc_07_asme1_ap242-e3.stp": {},
+ "ap242/nist_stc_08_asme1_ap242-e3.stp": {
+  "volume": 503592.175239539,
+  "volume_unit": "mm"
+ },
+ "ap242/nist_stc_09_asme1_ap242-e3.stp": {
+  "area": 96625.81536345115,
+  "area_unit": "inch",
+  "volume": 136465.16088726945,
+  "volume_unit": "inch"
+ },
+ "ap242/nist_stc_10_asme1_ap242-e2.stp": {
+  "area": 48486.2744665371,
+  "area_unit": "mm",
+  "volume": 188312.244641244,
+  "volume_unit": "mm"
+ }
+}

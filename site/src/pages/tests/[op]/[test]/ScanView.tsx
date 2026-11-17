@@ -1,0 +1,155 @@
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Annot } from '@/components'
+import type { Mark, ScanHandle } from './scan'
+import type { Loaded } from './viewer'
+
+type Status = 'loading' | 'ready' | 'missing' | 'unreadable'
+
+const EMPTY = new Float32Array(0)
+
+// The expected shape in Scan mode, with a kernel's misplaced points over it. The drawing code loads
+// after hydration; until the shape's file is published the points are drawn on their own.
+export function ScanView({
+  glb,
+  caption,
+  marks,
+  focus,
+  onPick,
+  files,
+}: {
+  glb: string
+  caption: string
+  marks: Mark[]
+  focus: number | null
+  onPick: (i: number | null) => void
+  files?: ReactNode
+}) {
+  const canvas = useRef<HTMLCanvasElement>(null)
+  const handle = useRef<ScanHandle | null>(null)
+  const pick = useRef(onPick)
+  pick.current = onPick
+  const [status, setStatus] = useState<Status>('loading')
+  const [loaded, setLoaded] = useState<Loaded | null>(null)
+
+  useEffect(() => {
+    let live = true
+    setStatus('loading')
+    setLoaded(null)
+    void import('./viewer').then(v =>
+      v.loadShape(glb).then(
+        l => {
+          if (!live) return
+          setLoaded(l)
+          setStatus('ready')
+        },
+        (e: unknown) => {
+          if (!live) return
+          const unreadable = e instanceof Error && e.message.startsWith('glb:')
+          setStatus(unreadable ? 'unreadable' : 'missing')
+        },
+      ),
+    )
+    return () => {
+      live = false
+    }
+  }, [glb])
+
+  useEffect(() => {
+    let live = true
+    void import('./viewer').then(v => {
+      if (!live || !canvas.current) return
+      const scene = {
+        edges: loaded?.shape.edges ?? EMPTY,
+        smooth: loaded?.shape.smooth ?? EMPTY,
+        cloud: loaded?.cloud ?? EMPTY,
+        marks,
+      }
+      if (handle.current) handle.current.set(scene)
+      else handle.current = v.mountScan(canvas.current, scene, i => pick.current(i))
+    })
+    return () => {
+      live = false
+    }
+  }, [loaded, marks])
+
+  useEffect(() => handle.current?.focus(focus), [focus, loaded, marks])
+
+  useEffect(
+    () => () => {
+      handle.current?.destroy()
+      handle.current = null
+    },
+    [],
+  )
+
+  // A result with no volume, such as the intersection of boxes that only touch, has no faces.
+  const hollow = status === 'ready' && loaded?.triangles === 0
+  const empty = ((status !== 'ready' && status !== 'loading') || hollow) && !marks.length
+  const state = {
+    loading: 'loading shape',
+    ready: loaded ? `glb · ${loaded.triangles.toLocaleString('en')} triangles` : '',
+    missing: 'shape not published yet',
+    unreadable: 'shape file unreadable',
+  }[status]
+
+  return (
+    <>
+      <div className="bc-scan" data-status={status} data-empty={empty || undefined}>
+        <canvas
+          ref={canvas}
+          className="bc-scan__canvas sc-focus"
+          tabIndex={empty ? -1 : 0}
+          aria-label={`${caption}: drag or use the arrow keys to turn`}
+          onDoubleClick={() => handle.current?.reset()}
+        />
+        {empty && (
+          <div className="bc-scan__empty sc-hatch">
+            <Annot>
+              {status === 'unreadable'
+                ? state
+                : hollow
+                  ? 'expected shape · empty'
+                  : 'expected shape · not published yet'}
+            </Annot>
+          </div>
+        )}
+        <div className="bc-scan__tl">
+          <Annot>scan</Annot>
+          <span className="bc-scan__case bc-machine">{caption}</span>
+        </div>
+        <div className="bc-scan__tr">
+          <Annot>{state}</Annot>
+        </div>
+        {!empty && (
+          <div className="bc-scan__bl">
+            <Annot>drag to turn · double-click resets</Annot>
+          </div>
+        )}
+        <i className="bc-scan__corner" />
+        <i className="bc-scan__corner" />
+        <i className="bc-scan__corner" />
+        <i className="bc-scan__corner" />
+      </div>
+      <div className="bc-shape__foot">
+        <div className="bc-shape__legend">
+          {marks.some(m => m.held) && (
+            <span>
+              <i className="bc-key bc-key--held" /> placed inside, belongs outside
+            </span>
+          )}
+          {marks.some(m => !m.held) && (
+            <span>
+              <i className="bc-key bc-key--missed" /> placed outside, belongs inside
+            </span>
+          )}
+          {status === 'ready' && !hollow && (
+            <span>
+              <i className="bc-key bc-key--cloud" /> points the shape holds, from its mesh
+            </span>
+          )}
+        </div>
+        {status !== 'missing' && status !== 'unreadable' && files}
+      </div>
+    </>
+  )
+}

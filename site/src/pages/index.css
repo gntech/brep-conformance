@@ -1,0 +1,508 @@
+/* The home page's own pieces. Shared ones live in src/styles/site.css. */
+
+/* ---- tier bar: proportional segments on the grade scale ---- */
+
+.hm-bar {
+  display: flex;
+  width: 100%;
+  min-width: 80px;
+  height: 12px;
+  border: var(--hairline-void-soft);
+}
+.hm-bar--thin {
+  min-width: 0;
+  height: 8px;
+}
+.hm-bar__seg {
+  min-width: 1px;
+}
+.hm-bar__seg[data-grade='1e-7'] {
+  background: var(--grade-1e-7);
+}
+.hm-bar__seg[data-grade='1e-6'] {
+  background: var(--grade-1e-6);
+}
+.hm-bar__seg[data-grade='1e-5'] {
+  background: var(--grade-1e-5);
+}
+.hm-bar__seg[data-grade='1e-3'] {
+  background: var(--grade-1e-3);
+}
+.hm-bar__seg[data-grade='unsupported'] {
+  background: repeating-linear-gradient(135deg, var(--void-ink-3) 0 1px, transparent 1px 4px);
+}
+/* Red as a mark, not a fill, and the error ink sits too near the 1e-6 orange to be told from it as
+   one: an empty box in the error ink. */
+.hm-bar__seg[data-grade='fail'],
+.hm-bar__seg[data-grade='crash'] {
+  outline: var(--hair) solid var(--grade-fail);
+  outline-offset: calc(-1 * var(--hair));
+}
+.hm-bar__seg[data-grade='refused'],
+.hm-bar__seg[data-grade='timeout'] {
+  /* An empty boxed segment, as the legend's empty square: ran, but no check to grade. */
+  outline: var(--hair) solid var(--void-ink-2);
+  outline-offset: calc(-1 * var(--hair));
+}
+
+/* ---- leaderboard ---- */
+
+.hm-tagline {
+  margin: 0 0 var(--sp-6);
+  font: var(--fw-voice-light) var(--fs-voice-1) / var(--lh-body) var(--font-voice);
+  color: var(--void-ink-1);
+}
+/* The open place under the last rank: an invitation, not a result. */
+.hm-slot {
+  display: block;
+  margin-bottom: var(--sp-4);
+  padding: var(--sp-4) var(--sp-3) var(--sp-4) 32px;
+  border-bottom: var(--hair) dashed var(--void-ink-3);
+  font: var(--fw-machine) var(--fs-read-4) / 1 var(--font-machine);
+  color: var(--void-ink-2);
+}
+.hm-slot:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.hm-board {
+  overflow-x: auto;
+}
+/* The compare column is named for screen readers only; its ticks speak for it on screen. */
+.hm-board--compare th:first-child > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.hm-kernel {
+  display: inline-grid;
+  justify-items: start;
+  gap: 4px;
+}
+.hm-license {
+  font: var(--fw-machine) var(--fs-micro-1) / 1.3 var(--font-machine);
+  color: var(--void-ink-2);
+  border-bottom: none;
+  white-space: nowrap;
+}
+.hm-license a {
+  border-bottom: none;
+  color: inherit;
+}
+.hm-license a:hover {
+  color: var(--accent);
+}
+.hm-pick {
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: var(--void-ink-3);
+  font: 400 16px / 1 var(--font-machine);
+  cursor: pointer;
+}
+.hm-pick[aria-pressed='true'] {
+  color: var(--accent);
+}
+.hm-pick:hover {
+  color: var(--void-ink-1);
+}
+.hm-overall {
+  font: var(--fw-machine) var(--fs-read-3) / 1 var(--font-machine);
+  font-variant-numeric: tabular-nums;
+  color: var(--void-ink-1);
+}
+
+/* ---- the tolerance table: tier bars with a hover card ---- */
+
+.hm-board--tiers table {
+  min-width: 1040px;
+}
+.hm-tiers {
+  display: grid;
+  gap: 3px;
+}
+.hm-ruler {
+  display: flex;
+  justify-content: space-between;
+  font: var(--fw-machine) 9px / 1 var(--font-machine);
+  color: var(--void-ink-2);
+}
+.hm-ruler span {
+  padding-left: 3px;
+  border-left: var(--hair) solid var(--void-ink-3);
+}
+.hm-rate--same .hm-rate__pct {
+  color: var(--void-ink-2);
+}
+.hm-more {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  font: var(--fw-machine) var(--fs-micro-1) / 1 var(--font-machine);
+  font-variant-numeric: tabular-nums;
+  color: var(--void-ink-1);
+}
+.hm-more--none {
+  color: var(--void-ink-3);
+}
+.hm-more > .bc-mark {
+  width: 8px;
+  height: 8px;
+}
+.hm-rate {
+  display: inline-grid;
+  justify-items: end;
+  gap: 2px;
+}
+.hm-rate__pct {
+  font: var(--fw-machine) var(--fs-read-3) / 1 var(--font-machine);
+  font-variant-numeric: tabular-nums;
+  color: var(--void-ink-1);
+}
+.hm-rate__of {
+  font: var(--fw-machine) var(--fs-micro-1) / 1 var(--font-machine);
+  font-variant-numeric: tabular-nums;
+  color: var(--void-ink-2);
+}
+
+/* ---- grid: every test × kernel ---- */
+
+.hm-grid {
+  --hm-col: minmax(120px, 180px);
+}
+.hm-grid__scroll {
+  overflow-x: auto;
+}
+.hm-grid__scroll > * {
+  min-width: calc(220px + var(--hm-k) * 136px);
+}
+.hm-grid__count {
+  align-self: center;
+}
+.hm-grid__tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: end;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-5);
+}
+.hm-grid__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--sp-4);
+}
+.hm-grid__toggle {
+  display: inline-flex;
+  border: var(--hairline-void-soft);
+}
+.hm-grid__toggle button {
+  padding: 7px 12px 6px;
+  border: none;
+  background: transparent;
+  color: var(--void-ink-2);
+  font: var(--fw-annot) var(--fs-micro-2) / 1.25 var(--font-annot);
+  letter-spacing: var(--ls-micro);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.hm-grid__toggle button + button {
+  border-left: var(--hairline-void-soft);
+}
+.hm-grid__toggle button:hover {
+  color: var(--void-ink-1);
+}
+.hm-grid__head,
+.hm-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(var(--hm-k), var(--hm-col));
+  align-items: center;
+  gap: var(--sp-4);
+}
+.hm-grid__head {
+  padding-bottom: var(--sp-3);
+  border-bottom: var(--hairline-void);
+}
+.hm-grid__kernel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: none;
+}
+a.hm-grid__kernel:hover {
+  color: var(--accent);
+}
+.hm-row {
+  min-height: 26px;
+  padding: 3px 0;
+  border-bottom: var(--hairline-void-soft);
+}
+.hm-row--op {
+  min-height: 32px;
+  cursor: pointer;
+  list-style: none;
+}
+.hm-row--op::-webkit-details-marker {
+  display: none;
+}
+.hm-row--op:hover .hm-op__name,
+.hm-op[open] > .hm-row--op .hm-op__name {
+  color: var(--accent);
+}
+.hm-row__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hm-op__name {
+  font: var(--fw-voice) var(--fs-voice-1) / 1.2 var(--font-voice);
+  color: var(--void-ink-1);
+}
+.hm-op__name::before {
+  content: '+';
+  display: inline-block;
+  width: 16px;
+  font-family: var(--font-machine);
+  color: var(--void-ink-2);
+}
+.hm-op[open] > .hm-row--op .hm-op__name::before {
+  content: '−';
+}
+.hm-op__count {
+  margin-left: 8px;
+  font: var(--fw-machine) var(--fs-micro-1) / 1 var(--font-machine);
+  color: var(--void-ink-2);
+}
+a.hm-row__test {
+  padding-left: 16px;
+  border-bottom: none;
+  font: var(--fw-machine) var(--fs-read-4) / 1.2 var(--font-machine);
+  color: var(--void-ink-2);
+}
+a.hm-row__test:hover {
+  color: var(--accent);
+}
+.hm-cell {
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  min-height: 18px;
+  padding: 3px 0;
+  border-bottom: none;
+  color: var(--void-ink-1);
+}
+.hm-cell--none {
+  color: var(--void-ink-2);
+}
+.hm-frac {
+  font-size: var(--fs-read-4);
+  line-height: 1;
+}
+/* A row under the pointer is picked out faintly, to carry the eye from a test's name to its
+   cells; the cell under it is a plate with a rule round it, since it is what a click opens. */
+.hm-grid__scroll .hm-row:hover {
+  background: rgb(255 255 255 / 0.04);
+}
+a.hm-cell {
+  margin: 0 -6px;
+  padding: 3px 6px;
+}
+a.hm-cell:hover,
+a.hm-cell:focus-visible {
+  background: rgb(255 255 255 / 0.1);
+  box-shadow: inset 0 0 0 var(--hair) var(--void-ink-2);
+  outline: none;
+}
+a.hm-cell:hover .hm-frac,
+a.hm-cell:focus-visible .hm-frac {
+  color: var(--accent);
+}
+.hm-time {
+  font-size: var(--fs-micro-1);
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--void-ink-2);
+}
+.hm-time--best {
+  color: var(--void-ink-1);
+}
+a.hm-cell:hover .hm-bar,
+a.hm-cell:focus-visible .hm-bar {
+  border-color: var(--accent);
+}
+.hm-grid__empty {
+  padding: var(--sp-5) 0;
+}
+
+@media (max-width: 720px) {
+  /* Every kernel compared fits a phone: a test's name takes a line of its own, the kernels share
+     the next. */
+  .hm-grid__head,
+  .hm-row {
+    grid-template-columns: repeat(var(--hm-k), minmax(0, 1fr));
+    gap: var(--sp-2) var(--sp-3);
+  }
+  .hm-grid__scroll > * {
+    min-width: 0;
+  }
+  .hm-grid__head > :first-child,
+  .hm-row > .hm-row__name {
+    grid-column: 1 / -1;
+  }
+  .hm-grid__kernel {
+    overflow: hidden;
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    text-overflow: ellipsis;
+  }
+  .hm-cell {
+    min-width: 0;
+  }
+  /* A time and its comparison do not fit one line of a phone's column: the comparison drops below. */
+  .hm-time__rel {
+    display: block;
+    margin-top: 3px;
+  }
+  .hm-time__sep {
+    display: none;
+  }
+}
+
+/* ---- phone: the leaderboard as a stacked list, the head and labels unwound ---- */
+
+.hm-cards {
+  display: none;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hm-card {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-3) var(--sp-3);
+  padding: var(--sp-4) 0;
+  border-bottom: var(--hairline-void-soft);
+}
+.hm-card__rank {
+  font: var(--fw-machine) var(--fs-read-4) / 1 var(--font-machine);
+  color: var(--void-ink-2);
+}
+.hm-card__bar,
+.hm-card > .bc-annot {
+  grid-column: 2 / -1;
+}
+
+@media (max-width: 720px) {
+  .hm-home .bc-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* The title's longest word must fit the narrowest phone. */
+  .hm-home .bc-display {
+    font-size: min(var(--fs-display-4), 11vw);
+  }
+  .hm-card > .bc-chip {
+    justify-self: start;
+  }
+  .hm-home .bc-head__corner {
+    justify-items: start;
+    text-align: left;
+  }
+  .hm-home .bc-section__label {
+    gap: var(--sp-4);
+  }
+  .hm-home .bc-section__label > .bc-annot + .bc-annot {
+    text-align: right;
+  }
+  .hm-board {
+    display: none;
+  }
+  .hm-cards {
+    display: block;
+  }
+}
+
+/* ---- the cases bar's hover card ---- */
+
+.hm-barcard {
+  display: block;
+}
+.hm-barcard a.hm-bar__seg:focus-visible {
+  outline-offset: 1px;
+}
+a.hm-bar__seg {
+  border-bottom: none;
+}
+a.hm-bar__seg:hover {
+  box-shadow: inset 0 0 0 1px var(--void-ink-1);
+}
+.hm-barcard__card {
+  position: fixed;
+  z-index: 20;
+  width: max-content;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: var(--sp-3) var(--sp-2);
+  background: var(--ground-void);
+  border: var(--hairline-void);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.6);
+  pointer-events: none;
+  font: var(--fw-machine) var(--fs-micro-1) / 1.4 var(--font-machine);
+  color: var(--void-ink-2);
+  white-space: normal;
+  text-align: left;
+}
+.hm-barcard__head {
+  display: flex;
+  padding: 0 6px;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-2);
+  color: var(--void-ink-1);
+}
+.hm-barcard__card table {
+  min-width: 0;
+  border-collapse: collapse;
+}
+.hm-barcard__card td {
+  padding: 3px 0 3px var(--sp-3);
+  border: none;
+  vertical-align: middle;
+}
+.hm-barcard__card td:first-child {
+  padding: 3px 6px;
+  line-height: 0;
+}
+.hm-barcard__grade {
+  color: var(--void-ink-1);
+}
+.hm-barcard__num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--void-ink-1);
+}
+.hm-barcard__why {
+  padding-right: 6px;
+}
+.hm-barcard__on td {
+  background: rgb(255 255 255 / 0.1);
+  color: var(--void-ink-1);
+}
+.hm-barcard__on td:first-child {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.hm-barcard__foot {
+  margin-top: var(--sp-2);
+  padding: 0 6px;
+  color: var(--void-ink-2);
+}
+
+.hm-board--tiers .hm-rate__of {
+  white-space: nowrap;
+}
+.hm-rules {
+  margin: var(--sp-4) 0 0;
+}

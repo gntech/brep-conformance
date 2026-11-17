@@ -1,0 +1,223 @@
+import { describe, expect, it } from 'vitest'
+import { fmt } from '@/components'
+import { GRADES, summarize, type CaseRow, type Grade, type TestEntry } from '@/data/results'
+import {
+  boardRows,
+  caseTitle,
+  distinctFilters,
+  grid,
+  keep,
+  matchesQuery,
+  shownShare,
+  relativeTimes,
+  toggleCompare,
+  type Cell,
+  type GridTest,
+} from './model'
+
+function cases(...grades: Grade[]): CaseRow[] {
+  return grades.map((grade, i) => ({ grade, kind: 'exact', failure: null, id: `c${i}` }) as CaseRow)
+}
+
+function entry(operation: string, slug: string, byKernel: Record<string, Grade[]>): TestEntry {
+  const kernels = Object.fromEntries(
+    Object.entries(byKernel).map(([k, gs]) => [
+      k,
+      { grade: gs[0]!, summary: summarize(cases(...gs)), why: '', failure: null, medianMs: 2 },
+    ]),
+  )
+  return { test: `x/${slug}`, slug, operation, kind: 'exact', asset: '', cases: [], kernels }
+}
+
+const at = (g: Grade) => GRADES.indexOf(g)
+
+describe('grid', () => {
+  const tests = [
+    entry('boolean', 'a', { k1: ['1e-7', '1e-7'], k2: ['1e-7', 'unsupported'] }),
+    entry('boolean', 'b', { k1: ['1e-6'], k2: ['fail'] }),
+    entry('fillet', 'c', { k1: ['1e-7'] }),
+  ]
+  const groups = grid(tests, ['k2', 'k1'])
+
+  it('groups tests by operation, with cells in the kernels order given', () => {
+    expect(groups.map(g => [g.operation, g.tests.map(t => t.slug)])).toEqual([
+      ['boolean', ['a', 'b']],
+      ['fillet', ['c']],
+    ])
+    expect(groups[0]!.tests[0]!.cells.map(c => c!.grade)).toEqual(['unsupported', '1e-7'])
+  })
+
+  it('sums an operation’s case counts per kernel and grades it by its worst case', () => {
+    const [k2, k1] = groups[0]!.cells
+    expect(k2!.counts[at('1e-7')]).toBe(1)
+    expect(k2!.counts[at('unsupported')]).toBe(1)
+    expect(k2!.counts[at('fail')]).toBe(1)
+    expect(k2!.grade).toBe('fail')
+    expect(k1!.counts[at('1e-7')]).toBe(2)
+    expect(k1!.grade).toBe('1e-6')
+  })
+
+  it('leaves a cell empty where a kernel has no such test', () => {
+    expect(groups[1]!.tests[0]!.cells[0]).toBeNull()
+    expect(groups[1]!.cells[0]).toBeNull()
+  })
+})
+
+// A test with one cell per argument, each cell one case at each grade given.
+function gridTest(...cells: (Grade[] | null)[]): GridTest {
+  return {
+    slug: 's',
+    test: 'x/s',
+    cells: cells.map(
+      gs =>
+        gs && {
+          grade: gs[0]!,
+          counts: GRADES.map(g => gs.filter(x => x === g).length),
+          medianMs: 1,
+        },
+    ),
+  }
+}
+
+describe('keep', () => {
+  it('keeps every test under all', () => {
+    expect(keep(gridTest(['1e-7'], ['1e-7']), 'all')).toBe(true)
+  })
+
+  it('tells a failure from a function not offered and from a looser tier', () => {
+    const kinds = (t: GridTest) =>
+      (['failed', 'unsupported', 'looser'] as const).filter(f => keep(t, f))
+    expect(kinds(gridTest(['1e-7'], ['1e-7', 'crash']))).toEqual(['failed'])
+    expect(kinds(gridTest(['1e-7'], ['timeout']))).toEqual(['failed'])
+    expect(kinds(gridTest(['1e-7'], ['unsupported']))).toEqual(['unsupported'])
+    expect(kinds(gridTest(['1e-7'], ['1e-7', '1e-5']))).toEqual(['looser'])
+    expect(kinds(gridTest(['fail'], ['unsupported']))).toEqual(['failed', 'unsupported'])
+  })
+
+  it('keeps under pass only a test every kernel ran and passed in full', () => {
+    expect(keep(gridTest(['1e-7'], ['1e-7', '1e-7']), 'pass')).toBe(true)
+    expect(keep(gridTest(['1e-7'], ['1e-7', '1e-6']), 'pass')).toBe(false)
+    expect(keep(gridTest(['1e-7'], null), 'pass')).toBe(false)
+  })
+
+  it('asks only the kernel in scope', () => {
+    const t = gridTest(['1e-7'], ['fail'])
+    expect([keep(t, 'failed', 0), keep(t, 'failed', 1)]).toEqual([false, true])
+    expect([keep(t, 'pass', 0), keep(t, 'pass', 1)]).toEqual([true, false])
+  })
+})
+
+describe('boardRows', () => {
+  const summary = summarize(cases('1e-7', '1e-6'))
+  const row = (kernel: string, factor: number | null) => ({
+    kernel,
+    name: kernel,
+    version: '1.0.0',
+    suite: '0.9.0',
+    date: '2026-11-09',
+    adapter: { name: `${kernel}-adapter`, version: '0.1.0', owner: 'org', license: 'MIT' },
+    summary,
+    speed: { factor, groups: factor === null ? 0 : 3, medians: {} },
+    time: factor === null ? null : { median: 4, q1: 3, q3: 5, cases: 2 },
+  })
+
+  it('keeps the leaderboard order as rank and sorts a missing time last', () => {
+    const rows = boardRows([row('a', 1.5), { ...row('b', null), adapter: null }])
+    expect(rows.map(r => [r.rank, r.kernel, r.adapter])).toEqual([
+      [1, 'a', 'a-adapter'],
+      [2, 'b', null],
+    ])
+    expect(rows[1]!.speed).toBe(Number.POSITIVE_INFINITY)
+    expect(rows[0]!.speedFactor).toBe(1.5)
+    expect(rows[1]!.medianMs).toBe(Number.POSITIVE_INFINITY)
+    expect(rows[0]!.medianMs).toBe(4)
+    expect(rows[0]!.counts[at('1e-6')]).toBe(1)
+  })
+
+  it('states a known kernel’s license and leaves an unknown one empty', () => {
+    expect(boardRows([row('solidcore', 1)])[0]!.license).toBe('Apache-2.0')
+    expect(boardRows([row('nope', 1)])[0]!.license).toBeNull()
+  })
+
+  it('says which kernel the suite’s maintainer makes', () => {
+    expect(boardRows([row('springrep', 1)])[0]!.maintainers).toBe(true)
+    expect(boardRows([row('solidcore', 1)])[0]!.maintainers).toBe(false)
+  })
+})
+
+describe('distinctFilters', () => {
+  it('offers a filter only where it keeps some tests and not all of them', () => {
+    const tests = [gridTest(['1e-7'], ['fail']), gridTest(['1e-7'], ['1e-7'])]
+    expect(distinctFilters(tests)).toEqual(['all', 'failed', 'pass'])
+    expect(distinctFilters([gridTest(['1e-7'], ['fail'])])).toEqual(['all'])
+  })
+
+  it('offers both of two filters that keep the same tests', () => {
+    const tests = [gridTest(['fail', 'unsupported']), gridTest(['1e-7'])]
+    expect(distinctFilters(tests)).toEqual(['all', 'failed', 'unsupported', 'pass'])
+  })
+
+  it('follows the kernel in scope', () => {
+    const tests = [gridTest(['1e-7'], ['fail']), gridTest(['1e-7'], ['1e-7'])]
+    expect(distinctFilters(tests, 0)).toEqual(['all'])
+    expect(distinctFilters(tests, 1)).toEqual(['all', 'failed', 'pass'])
+  })
+})
+
+describe('shownShare', () => {
+  it('rounds to 100% or 0% only a share that is one', () => {
+    expect(fmt.pct(shownShare(2000, 2000))).toBe('100.0%')
+    expect(fmt.pct(shownShare(1999, 2000))).toBe('99.9%')
+    expect(fmt.pct(shownShare(1, 2000))).toBe('0.1%')
+    expect(fmt.pct(shownShare(0, 2000))).toBe('0.0%')
+    expect(fmt.pct(shownShare(1194, 1253))).toBe('95.3%')
+  })
+})
+
+describe('caseTitle', () => {
+  it('names each grade’s count', () => {
+    const counts = GRADES.map(g => (g === '1e-7' ? 3 : g === 'fail' ? 1 : 0))
+    expect(caseTitle('k', 'spheres', { grade: 'fail', counts, medianMs: null })).toBe(
+      'k · spheres: 3 1e-7, 1 fail of 4 cases',
+    )
+    expect(caseTitle('k', 'spheres', null)).toBe('k · spheres: not run')
+  })
+})
+
+const cell = (pass: number, of: number, medianMs: number | null): Cell => ({
+  grade: pass === of ? '1e-7' : 'fail',
+  counts: GRADES.map(g => (g === '1e-7' ? pass : g === 'fail' ? of - pass : 0)),
+  medianMs,
+})
+
+describe('relativeTimes', () => {
+  it('divides by the fastest cell that passed a case, and skips one that passed none', () => {
+    expect(relativeTimes([cell(2, 2, 4), cell(1, 2, 2), cell(0, 2, 1), null])).toEqual([
+      2,
+      1,
+      null,
+      null,
+    ])
+  })
+})
+
+describe('toggleCompare', () => {
+  const order = ['a', 'b', 'c', 'd', 'e']
+
+  it('adds in rank order up to four, and removes down to two', () => {
+    expect(toggleCompare(['a', 'c'], 'b', order)).toEqual(['a', 'b', 'c'])
+    expect(toggleCompare(['a', 'b', 'c', 'd'], 'e', order)).toEqual(['a', 'b', 'c', 'd'])
+    expect(toggleCompare(['a', 'b', 'c'], 'b', order)).toEqual(['a', 'c'])
+    expect(toggleCompare(['a', 'c'], 'c', order)).toEqual(['a', 'c'])
+  })
+})
+
+describe('matchesQuery', () => {
+  const t: GridTest = { slug: 'overlap-spheres', test: 'booleans/overlap/spheres', cells: [] }
+
+  it('needs every word somewhere in the operation or test', () => {
+    expect(matchesQuery(t, 'booleans', 'sphere bool')).toBe(true)
+    expect(matchesQuery(t, 'booleans', 'sphere fillet')).toBe(false)
+    expect(matchesQuery(t, 'booleans', '  ')).toBe(true)
+  })
+})

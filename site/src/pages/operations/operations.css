@@ -1,0 +1,303 @@
+.bc-op-status {
+  display: flex;
+  margin: 0;
+  flex-wrap: wrap;
+  gap: var(--sp-3) var(--sp-4);
+  align-items: center;
+  color: var(--void-ink-2);
+  font: var(--fw-voice) var(--fs-voice-2) / 1.4 var(--font-voice);
+}
+
+.bc-op-prose {
+  max-width: 72ch;
+  font: var(--fw-voice) var(--fs-body) / var(--lh-body) var(--font-voice);
+  color: var(--void-ink-1);
+}
+.bc-op-prose p,
+.bc-op-prose ul,
+.bc-op-prose ol {
+  margin: 0 0 var(--sp-4);
+}
+.bc-op-prose code {
+  font: var(--fw-machine) 0.92em / 1 var(--font-machine);
+  overflow-wrap: anywhere;
+  color: var(--void-ink-1);
+}
+/* A formula in a face with real mathematics in it, at the prose's own size. */
+.bc-op-prose code.bc-math {
+  font:
+    400 1.04em / 1.5 'STIX Two Math',
+    'Cambria Math',
+    'Times New Roman',
+    serif;
+  font-style: italic;
+  white-space: normal;
+}
+.bc-op-prose strong {
+  font-weight: 600;
+}
+.bc-op-prose .bc-op-sig {
+  display: grid;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-5);
+}
+.bc-op-prose .bc-op-sig code {
+  font: var(--fw-machine) var(--fs-read-3) / 1.6 var(--font-machine);
+}
+.bc-op-prose--quiet {
+  color: var(--void-ink-2);
+}
+
+.bc-op-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-5) var(--sp-8);
+  margin-bottom: var(--sp-7);
+}
+
+.bc-op-dash {
+  color: var(--void-ink-2);
+}
+
+.bc-op-scroll {
+  overflow-x: auto;
+}
+
+.bc-op-table {
+  border-collapse: collapse;
+  margin: 0 0 1em;
+}
+
+.bc-op-table th,
+.bc-op-table td {
+  padding: 2px 16px 2px 0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.bc-op-code {
+  margin: 0 0 var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  overflow-x: auto;
+  border: var(--hairline-void-soft);
+  font: var(--fw-machine) var(--fs-micro-1) / 1.6 var(--font-machine);
+  color: var(--void-ink-1);
+}
+.bc-op-code code {
+  font: inherit;
+}
+
+/* ---- the functions table: a column per kernel, a group's functions under its heading ---- */
+
+.fn-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3) var(--sp-5);
+  align-items: center;
+  margin-bottom: var(--sp-5);
+}
+.fn-filter {
+  flex: 0 1 320px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: var(--hairline-void-soft);
+  background: transparent;
+  color: var(--void-ink-1);
+  font: var(--fw-machine) var(--fs-read-4) / 1.2 var(--font-machine);
+}
+.fn-filter::placeholder {
+  color: var(--void-ink-3);
+}
+.fn-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-5);
+  align-items: center;
+  margin-left: auto;
+  font: var(--fw-voice) var(--fs-voice-2) / 1.3 var(--font-voice);
+  color: var(--void-ink-2);
+}
+.fn-key > span {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+/* What a kernel offers is the quiet case and what it lacks the one to find: a small dim square
+   against a box hatched in the bright ink. */
+.fn-yes {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--void-ink-2);
+}
+:is(.fn-table, .fn-key) .bc-mark[data-grade='unsupported'] {
+  --hatch-c: var(--void-ink-1);
+  width: 14px;
+  height: 14px;
+  border-color: var(--void-ink-2);
+}
+.fn-standin {
+  font: var(--fw-machine) var(--fs-micro-1) / 1.2 var(--font-machine);
+  color: var(--void-ink-2);
+}
+
+.fn-table {
+  width: 100%;
+  /* Separate, so the pinned head keeps the rule under it: a collapsed border scrolls away. */
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+.fn-table th,
+.fn-table td {
+  padding: 7px 0;
+  border-bottom: var(--hairline-void-soft);
+  text-align: center;
+  vertical-align: middle;
+  line-height: 1;
+}
+.fn-table th:first-child {
+  text-align: left;
+  font-weight: inherit;
+}
+.fn-table td,
+.fn-kernel {
+  width: 130px;
+}
+/* The kernels' names stay in view down all the functions, under the site's own header. */
+.fn-table thead {
+  position: sticky;
+  top: var(--chrome-h);
+  z-index: 2;
+  background: var(--ground-void);
+}
+.fn-table thead th {
+  font: var(--fw-annot) var(--fs-micro-3) / 1 var(--font-annot);
+  letter-spacing: var(--ls-micro);
+  text-transform: uppercase;
+  color: var(--void-ink-2);
+}
+.fn-kernel a {
+  color: var(--void-ink-1);
+}
+.fn-kernel a:hover {
+  color: var(--accent);
+}
+.fn-pair {
+  display: inline-grid;
+  gap: 3px;
+  justify-items: center;
+  font-variant-numeric: tabular-nums;
+}
+.fn-pair__n {
+  font: var(--fw-machine) var(--fs-read-3) / 1 var(--font-machine);
+  color: var(--void-ink-1);
+}
+.fn-pair__of {
+  font: var(--fw-machine) var(--fs-micro-1) / 1 var(--font-machine);
+  color: var(--void-ink-2);
+}
+.fn-narrow {
+  display: none;
+}
+/* The pinned head ends in a full rule, so what scrolls under it reads as under it. */
+.fn-table .fn-totals > * {
+  padding-bottom: var(--sp-3);
+  border-bottom: var(--hair) solid var(--void-ink-1);
+}
+/* A group opens with clear air above it and a band of its own, its name in the display face: a
+   heading over its operations, not one more row among them. */
+.fn-table tbody[data-group]::before {
+  content: '';
+  display: table-row;
+  height: var(--sp-7);
+}
+.fn-table .fn-group > * {
+  padding: var(--sp-4) 0;
+  border-bottom: var(--hairline-void);
+  background: rgb(255 255 255 / 0.07);
+}
+.fn-table .fn-group > th {
+  padding-left: var(--sp-4);
+}
+/* A cell stays a table cell, so a row's rules meet; what it holds is laid out inside it. */
+.fn-cell {
+  display: flex;
+  gap: var(--sp-5);
+  align-items: baseline;
+  min-width: 0;
+}
+.fn-group .fn-cell {
+  flex-wrap: wrap;
+  gap: 4px var(--sp-4);
+}
+.fn-group__name {
+  font: var(--fw-display) var(--fs-read-2) / 1 var(--font-display);
+  letter-spacing: var(--ls-display);
+  text-transform: uppercase;
+  color: var(--void-ink-1);
+}
+.fn-table tbody tr[data-fn] th {
+  font: var(--fw-machine) var(--fs-read-4) / 1.3 var(--font-machine);
+}
+.fn-table tbody tr[data-fn] th > a {
+  flex: none;
+}
+.fn-sig {
+  overflow: hidden;
+  min-width: 0;
+  font-size: var(--fs-micro-1);
+  color: var(--void-ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fn-none {
+  margin: var(--sp-5) 0 0;
+}
+
+@media (max-width: 720px) {
+  .fn-key {
+    margin-left: 0;
+  }
+  .fn-sig {
+    display: none;
+  }
+  .fn-table td,
+  .fn-kernel {
+    width: 46px;
+  }
+  /* A name over a column one mark wide leans at 45° from the column's foot. */
+  .fn-kernel {
+    position: relative;
+    height: 84px;
+  }
+  .fn-kernel a {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: rotate(-45deg);
+    transform-origin: left bottom;
+    white-space: nowrap;
+  }
+  .fn-table thead tr:first-child th:first-child {
+    vertical-align: bottom;
+  }
+  .fn-standin {
+    font-size: 9px;
+  }
+  .fn-wide {
+    display: none;
+  }
+  .fn-narrow {
+    display: inline;
+  }
+  .fn-pair__n {
+    font-size: var(--fs-read-4);
+  }
+  .fn-table .fn-group > th {
+    padding-left: var(--sp-3);
+  }
+  .fn-group__name {
+    font-size: 17px;
+  }
+}

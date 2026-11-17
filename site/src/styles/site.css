@@ -1,0 +1,395 @@
+/* Self-hosted faces, so the page loads nothing from Google Fonts; scripts/fetch-ds.mjs drops the
+   design system's import of them. */
+@import '@fontsource-variable/archivo';
+@import '@fontsource-variable/hanken-grotesk';
+@import '@fontsource-variable/martian-mono';
+
+@import '../../.ds/sc.css';
+
+:root {
+  --font-display: 'Archivo Variable', 'Helvetica Neue', Helvetica, sans-serif;
+  --font-annot: 'Archivo Variable', 'Helvetica Neue', Helvetica, sans-serif;
+  --font-voice: 'Hanken Grotesk Variable', 'Archivo Variable', sans-serif;
+  --font-machine: 'Martian Mono Variable', ui-monospace, 'SFMono-Regular', monospace;
+
+  /* The one scale every kernel is read on. Tiers take the lidar ramp, brightest best; it is data
+     visualisation, so it marks cells and swatches and never sits behind type. */
+  --grade-1e-7: var(--lidar-5);
+  --grade-1e-6: var(--lidar-4);
+  --grade-1e-5: var(--lidar-3);
+  --grade-1e-3: var(--lidar-2);
+  --grade-fail: var(--error-void);
+  --grade-quiet: var(--void-ink-2);
+}
+
+html {
+  background: var(--ground-void);
+}
+
+body {
+  min-height: 100vh;
+}
+
+/* ---- shell ---- */
+
+.bc-chrome {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  height: 56px;
+  padding: 0 var(--grid-margin-wide);
+  border-bottom: var(--hairline-void-soft);
+  /* It stays in view: the search box in it narrows lists a screen below. */
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--ground-void);
+}
+/* What a link or a search scrolls to stops below the header, not under it. */
+:root {
+  /* The header's height, for what sticks or stops below it. */
+  --chrome-h: 56px;
+}
+[id] {
+  scroll-margin-top: calc(var(--chrome-h) + 16px);
+}
+.bc-chrome a {
+  border-bottom: none;
+}
+.bc-chrome__id {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--void-ink-1);
+  font: var(--fw-voice) var(--fs-voice-2) / 1 var(--font-voice);
+}
+.bc-search {
+  flex: 1;
+  min-width: 0;
+  max-width: 420px;
+  margin-left: auto;
+}
+.bc-search input {
+  width: 100%;
+  height: 34px;
+  padding: 0 12px;
+  border: var(--hairline-void-soft);
+  border-radius: 0;
+  background: transparent;
+  color: var(--void-ink-1);
+  font: var(--fw-machine) var(--fs-micro-1) / 1 var(--font-machine);
+}
+.bc-search input::placeholder {
+  color: var(--void-ink-2);
+}
+.bc-chrome__nav {
+  display: flex;
+  flex: none;
+  border: var(--hairline-void-soft);
+}
+.bc-chrome__nav a {
+  padding: 8px 14px;
+  color: var(--void-ink-2);
+  font: var(--fw-voice) var(--fs-voice-2) / 1 var(--font-voice);
+}
+.bc-chrome__nav a + a {
+  border-left: var(--hairline-void-soft);
+}
+.bc-chrome__nav a:hover {
+  color: var(--void-ink-1);
+}
+.bc-chrome__nav a[aria-current='page'] {
+  color: var(--accent);
+}
+
+.bc-main {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: var(--sp-7) var(--grid-margin-wide) var(--sp-10);
+}
+
+.bc-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--sp-3) var(--sp-6);
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: var(--sp-4) var(--grid-margin-wide) var(--sp-8);
+  border-top: var(--hairline-void-soft);
+}
+.bc-foot a {
+  color: inherit;
+}
+
+@media (max-width: 1080px) {
+  .bc-chrome {
+    gap: var(--sp-4);
+  }
+  .bc-chrome__nav a {
+    padding: 8px 10px;
+  }
+}
+
+@media (max-width: 720px) {
+  .bc-chrome,
+  .bc-main,
+  .bc-foot {
+    padding-left: var(--grid-margin);
+    padding-right: var(--grid-margin);
+  }
+  :root {
+    --chrome-h: 89px;
+  }
+  /* A page's corner labels go under its title: beside it they run into a long one. */
+  .bc-main .bc-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bc-main .bc-head__corner {
+    justify-items: start;
+    text-align: left;
+  }
+  /* A title's longest word fits the narrowest phone. */
+  .bc-main .bc-display {
+    font-size: min(var(--fs-display-4), 11vw);
+  }
+  .bc-chrome {
+    flex-wrap: wrap;
+    height: auto;
+    padding-top: var(--sp-3);
+    padding-bottom: var(--sp-3);
+    row-gap: var(--sp-3);
+  }
+  .bc-chrome__id span {
+    display: none;
+  }
+  .bc-chrome__nav {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+  }
+  .bc-chrome__nav a {
+    white-space: nowrap;
+  }
+}
+
+/* ---- type ---- */
+
+.bc-annot {
+  font: var(--fw-annot) var(--fs-micro-2) / 1.25 var(--font-annot);
+  letter-spacing: var(--ls-micro);
+  text-transform: uppercase;
+  color: var(--void-ink-2);
+}
+.bc-display {
+  margin: 0;
+  font: var(--fw-display) var(--fs-display-4) / var(--lh-display) var(--font-display);
+  letter-spacing: var(--ls-display);
+  text-transform: uppercase;
+  color: var(--void-ink-1);
+}
+.bc-machine {
+  font-family: var(--font-machine);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--ls-read);
+}
+.bc-body {
+  max-width: var(--measure-body);
+  font: var(--fw-voice) var(--fs-body) / var(--lh-body) var(--font-voice);
+  color: var(--void-ink-1);
+}
+
+/* ---- page head: title left, registration labels in the far corner ---- */
+
+.bc-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-6);
+  align-items: end;
+  padding-bottom: var(--sp-6);
+  margin-bottom: var(--sp-7);
+  border-bottom: var(--hairline-void-soft);
+}
+.bc-head__corner {
+  display: grid;
+  gap: var(--sp-2);
+  justify-items: end;
+  text-align: right;
+}
+
+/* ---- section: a ruled region with a micro-caps label ---- */
+
+.bc-section {
+  margin-top: var(--sp-8);
+}
+.bc-section__label {
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  border-bottom: var(--hairline-void-soft);
+}
+
+/* ---- kernel chip: identical for every kernel, no colour ---- */
+
+.bc-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 7px;
+  border: var(--hairline-void-soft);
+  color: var(--void-ink-1);
+  font: var(--fw-voice) var(--fs-voice-2) / 1.2 var(--font-voice);
+  white-space: nowrap;
+}
+a.bc-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.bc-chip__version {
+  font: var(--fw-machine) var(--fs-read-4) / 1.2 var(--font-machine);
+  color: var(--void-ink-2);
+}
+
+/* ---- grades ---- */
+
+.bc-grade {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--fw-machine) var(--fs-read-4) / 1 var(--font-machine);
+  font-variant-numeric: tabular-nums;
+  color: var(--void-ink-1);
+  white-space: nowrap;
+}
+.bc-grade[data-grade='fail'],
+.bc-grade[data-grade='crash'] {
+  color: var(--grade-fail);
+}
+.bc-grade[data-grade='unsupported'],
+.bc-grade[data-grade='refused'],
+.bc-grade[data-grade='timeout'] {
+  color: var(--grade-quiet);
+}
+
+.bc-mark {
+  display: inline-block;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border: var(--hairline-void-soft);
+}
+.bc-mark[data-grade='1e-7'] {
+  background: var(--grade-1e-7);
+  border-color: var(--grade-1e-7);
+}
+.bc-mark[data-grade='1e-6'] {
+  background: var(--grade-1e-6);
+  border-color: var(--grade-1e-6);
+}
+.bc-mark[data-grade='1e-5'] {
+  background: var(--grade-1e-5);
+  border-color: var(--grade-1e-5);
+}
+.bc-mark[data-grade='1e-3'] {
+  background: var(--grade-1e-3);
+  border-color: var(--grade-1e-3);
+}
+.bc-mark[data-grade='unsupported'] {
+  --hatch-c: var(--void-ink-3);
+}
+.bc-mark[data-grade='fail'],
+.bc-mark[data-grade='crash'] {
+  border: none;
+  color: var(--grade-fail);
+  font: var(--fw-machine) 12px / 12px var(--font-machine);
+  text-align: center;
+}
+.bc-mark[data-grade='fail']::before,
+.bc-mark[data-grade='crash']::before {
+  content: '×';
+}
+
+/* Beside a bar the mark is the bar's own: an empty box in the error ink, not the table's ×. */
+:is(.bc-legend:not(.bc-legend--table), .hm-barcard__card)
+  .bc-mark:is([data-grade='fail'], [data-grade='crash']) {
+  border: var(--hair) solid var(--grade-fail);
+}
+:is(.bc-legend:not(.bc-legend--table), .hm-barcard__card)
+  .bc-mark:is([data-grade='fail'], [data-grade='crash'])::before {
+  content: none;
+}
+.bc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3) var(--sp-5);
+}
+
+/* ---- stat: one number, one label ---- */
+
+.bc-stat {
+  display: grid;
+  gap: var(--sp-2);
+}
+.bc-stat__value {
+  font: var(--fw-machine) var(--fs-read-1) / 1 var(--font-machine);
+  font-variant-numeric: tabular-nums;
+  color: var(--void-ink-1);
+}
+
+/* ---- hatched placeholder: a region with nothing to show yet ---- */
+
+.bc-hatched {
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  border: var(--hairline-void-soft);
+  --hatch-c: var(--void-ink-4);
+}
+.bc-hatched > span {
+  padding: 4px 8px;
+  background: var(--ground-void);
+}
+
+/* ---- accessibility ---- */
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.bc-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.bc-skip {
+  position: absolute;
+  top: var(--sp-3);
+  left: var(--sp-3);
+  z-index: 50;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--ground-void);
+  border: var(--hairline-void);
+  transform: translateY(-200%);
+}
+.bc-skip:focus {
+  transform: none;
+}
+.bc-main:focus {
+  outline: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+.bc-section__title {
+  margin: 0;
+}

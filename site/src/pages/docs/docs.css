@@ -1,0 +1,344 @@
+/* The docs page: contents left, definitions in the middle, each function's call on the right. */
+
+.dx {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: 0 var(--sp-6);
+  align-items: start;
+}
+
+/* ---- contents ---- */
+
+.dx-nav {
+  /* Pinned below the site's header, and no taller than what is left of the window. */
+  position: sticky;
+  top: var(--chrome-h);
+  max-height: calc(100vh - var(--chrome-h));
+  overflow-y: auto;
+  padding: var(--sp-4) 0 var(--sp-8);
+}
+.dx-nav ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* Finds a section by its name: the list narrows to the headings that match. */
+.dx-find {
+  display: block;
+  width: calc(100% - 10px);
+  margin: 0 0 var(--sp-4);
+  padding: 7px 10px;
+  border: var(--hairline-void-soft);
+  background: transparent;
+  color: var(--void-ink-1);
+  font: var(--fw-machine) var(--fs-micro-1) / 1.2 var(--font-machine);
+}
+.dx-find::placeholder {
+  color: var(--void-ink-2);
+}
+/* Named with the script's own class, to outrank the rule that folds every group but one. */
+.dx-nav--js.dx-nav--finding .dx-nav__g > ul {
+  display: block;
+}
+.dx-nav li[hidden] {
+  display: none;
+}
+.dx-nav a {
+  display: block;
+  border-bottom: none;
+  color: var(--void-ink-2);
+}
+.dx-nav a:hover {
+  color: var(--void-ink-1);
+}
+.dx-nav__part {
+  padding-top: var(--sp-5);
+}
+.dx-nav__part:first-child {
+  padding-top: 0;
+}
+.dx-nav__part > a {
+  padding: 0 0 var(--sp-2) 10px;
+  color: var(--void-ink-1);
+  font: var(--fw-display) var(--fs-micro-2) / 1.2 var(--font-display);
+  letter-spacing: var(--ls-micro);
+  text-transform: uppercase;
+}
+.dx-nav__g > a {
+  padding: 5px 10px;
+  font: var(--fw-annot) var(--fs-micro-2) / 1.3 var(--font-annot);
+  letter-spacing: var(--ls-micro);
+  text-transform: uppercase;
+}
+.dx-nav__g > ul {
+  padding: 2px 0 var(--sp-3);
+}
+.dx-nav--js .dx-nav__g > ul {
+  display: none;
+}
+.dx-nav--js .dx-nav__g.dx-open > ul {
+  display: block;
+}
+.dx-nav__g li a {
+  padding: 3px 10px 3px 22px;
+  font: var(--fw-voice) var(--fs-voice-2) / 1.4 var(--font-voice);
+}
+.dx-nav__g li a.dx-nav__fn {
+  font: var(--fw-machine) var(--fs-micro-1) / 1.6 var(--font-machine);
+}
+.dx-nav a.dx-on {
+  color: var(--void-ink-1);
+  background: rgb(255 255 255 / 0.08);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.dx-menu {
+  display: none;
+}
+
+/* ---- parts and entries ---- */
+
+.dx-part {
+  max-width: 780px;
+  padding: var(--sp-8) 0 0;
+  scroll-margin-top: calc(var(--chrome-h) + var(--sp-4));
+}
+.dx-main > div:first-child > .dx-part {
+  padding-top: var(--sp-4);
+}
+.dx-part h2 {
+  margin: 0 0 var(--sp-4);
+  font: var(--fw-display) var(--fs-display-5) / 1.05 var(--font-display);
+  letter-spacing: var(--ls-display);
+  text-transform: uppercase;
+}
+.dx-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 440px);
+  gap: 0 var(--sp-4);
+  scroll-margin-top: calc(var(--chrome-h) + var(--sp-4));
+}
+.dx-entry--wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+.dx-entry--head {
+  margin-top: var(--sp-7);
+}
+.dx-entry--head h3::before {
+  content: '';
+  display: block;
+  width: 44px;
+  height: 1px;
+  margin-bottom: 18px;
+  background: var(--void-ink-2);
+}
+.dx-doc {
+  min-width: 0;
+  max-width: 760px;
+  padding: var(--sp-5) 0 var(--sp-5);
+}
+.dx-doc h3,
+.dx-doc h4 {
+  margin: 0 0 var(--sp-4);
+}
+.dx-doc h3 {
+  font: var(--fw-display) var(--fs-display-6) / 1.1 var(--font-display);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.dx-doc h4.dx-fn {
+  font: var(--fw-machine) 18px / 1.2 var(--font-machine);
+}
+.dx-doc h4.dx-sub {
+  font: var(--fw-display) var(--fs-body) / 1.2 var(--font-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.dx-doc h3 a,
+.dx-doc h4 a {
+  border-bottom: none;
+  color: var(--void-ink-1);
+}
+.dx-doc h3 a:hover,
+.dx-doc h4 a:hover {
+  color: var(--accent);
+}
+.dx-doc .bc-op-sig {
+  padding: 6px 0 6px 12px;
+  border-left: var(--hair) solid var(--accent);
+}
+.dx-doc .bc-op-sig code {
+  font-size: var(--fs-read-4);
+}
+.dx-support {
+  font: var(--fw-annot) var(--fs-micro-2) / 1.25 var(--font-annot);
+  letter-spacing: var(--ls-micro);
+  text-transform: uppercase;
+}
+
+/* Tables read as the site's: micro-caps heads, hairline rows. */
+.dx .bc-op-table {
+  width: 100%;
+  font-size: var(--fs-voice-2);
+}
+.dx .bc-op-table th {
+  padding: 6px 14px 6px 0;
+  border-bottom: var(--hairline-void);
+  text-align: left;
+  font: var(--fw-annot) var(--fs-micro-2) / 1.25 var(--font-annot);
+  letter-spacing: var(--ls-micro);
+  text-transform: uppercase;
+  color: var(--void-ink-2);
+}
+.dx .bc-op-table td {
+  padding: 5px 14px 5px 0;
+  border-bottom: var(--hairline-void-soft);
+  color: var(--void-ink-1);
+}
+.dx .bc-op-table td a:has(> code:only-child) {
+  border-bottom: none;
+}
+.dx .bc-op-table td a:hover code {
+  color: var(--accent);
+}
+
+/* ---- examples ---- */
+
+.dx-ex {
+  min-width: 0;
+  padding: var(--sp-5) 0;
+}
+.dx-stick {
+  position: sticky;
+  top: calc(var(--chrome-h) + var(--sp-4));
+}
+.dx-box {
+  padding: 12px 14px 14px;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+}
+.dx-box + .dx-box {
+  margin-top: 10px;
+}
+.dx-box--req {
+  background: #0b1226;
+}
+.dx-box--res {
+  background: #08191a;
+}
+.dx-cap {
+  margin: 0 0 8px;
+  font: var(--fw-annot) var(--fs-micro-1) / 1 var(--font-annot);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.dx-box--req .dx-cap {
+  color: #5b8cff;
+}
+.dx-box--res .dx-cap {
+  color: #7ce8d0;
+}
+/* A long example shows its first lines and opens in place; it never scrolls inside itself, unless
+   the page's script has not run to give it its button. */
+.dx--js .dx-box pre {
+  max-height: 236px;
+  overflow-y: hidden;
+}
+.dx--js .dx-box pre[data-long] {
+  mask-image: linear-gradient(#000 calc(100% - 40px), transparent);
+}
+.dx--js .dx-box pre[data-open] {
+  max-height: none;
+  mask-image: none;
+}
+.dx-more {
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  border-bottom: var(--hair) solid var(--void-ink-3);
+  background: none;
+  color: var(--void-ink-2);
+  font: var(--fw-annot) var(--fs-micro-1) / 1.3 var(--font-annot);
+  letter-spacing: var(--ls-micro);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.dx-more:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.dx-box pre {
+  max-height: 360px;
+  overflow-y: auto;
+  margin: 0;
+  overflow-x: auto;
+  font: var(--fw-machine) var(--fs-read-4) / 1.6 var(--font-machine);
+  color: var(--void-ink-1);
+  white-space: pre;
+}
+.dx-note {
+  margin: 12px 2px 0;
+  color: var(--void-ink-2);
+  font: var(--fw-voice) var(--fs-voice-2) / 1.5 var(--font-voice);
+}
+.dx-note p {
+  margin: 0;
+}
+.dx-none {
+  margin: 0;
+  color: var(--void-ink-2);
+  font: var(--fw-voice) var(--fs-voice-2) / 1.5 var(--font-voice);
+}
+
+@media (max-width: 1180px) {
+  .dx-entry {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dx-ex {
+    padding-top: 0;
+  }
+  .dx-ex:empty {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .dx {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* The contents bar sits under the header here, so a section stops below both. */
+  .dx-part,
+  .dx-entry {
+    scroll-margin-top: calc(var(--chrome-h) + 48px);
+  }
+  .dx-menu {
+    display: block;
+    position: sticky;
+    top: var(--chrome-h);
+    z-index: 4;
+    width: 100%;
+    padding: 10px 0;
+    border: none;
+    border-bottom: var(--hairline-void-soft);
+    background: var(--ground-void);
+    color: var(--void-ink-1);
+    text-align: left;
+    font: var(--fw-annot) var(--fs-micro-2) / 1.25 var(--font-annot);
+    letter-spacing: var(--ls-micro);
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .dx-nav {
+    display: none;
+  }
+  .dx-menu-open .dx-nav {
+    display: block;
+    position: fixed;
+    inset: var(--chrome-h) auto 0 0;
+    overflow-y: auto;
+    z-index: 5;
+    width: 280px;
+    max-height: none;
+    padding: var(--sp-5) var(--sp-4);
+    background: var(--ground-void);
+    border-right: var(--hairline-void-soft);
+  }
+}

@@ -1,0 +1,6 @@
+node_modules/
+dist/
+# Vite’s dev-server dependency cache, written by `npm run dev`.
+.vite/
+# The design system build scripts/fetch-ds.mjs fetches.
+.ds/

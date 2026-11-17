@@ -1,0 +1,32 @@
+{
+  "name": "brep-conformance-site",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "postinstall": "node scripts/fetch-ds.mjs",
+    "dev": "vite",
+    "build": "vite build --outDir dist/client && vite build --ssr src/entry-server.tsx --outDir dist/server && node scripts/prerender.mjs",
+    "preview": "vite preview --outDir dist/site",
+    "test": "vitest run",
+    "check": "bash -c 'rc=0; tsc -p . || rc=1; vitest run || rc=1; prettier --check --log-level warn . || rc=1; npm run build --silent >/dev/null || rc=1; exit $rc'",
+    "fix": "prettier --write --log-level warn ."
+  },
+  "dependencies": {
+    "@fontsource-variable/archivo": "^5.3.0",
+    "@fontsource-variable/hanken-grotesk": "^5.3.0",
+    "@fontsource-variable/martian-mono": "^5.3.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "prettier": "3.9.9",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.6",
+    "vitest": "^3.2.0"
+  }
+}
