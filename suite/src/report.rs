@@ -253,7 +253,7 @@ pub fn flat(results: &Value, verified: bool) -> Value {
             let result = c["result"].as_str().unwrap_or("crash");
             *counts.entry(result.to_string()).or_default() += 1;
             let median = medians.get(&test);
-            json!({
+            let mut row = json!({
                 "id": c["id"],
                 "test": test,
                 "operation": area(&test),
@@ -266,14 +266,34 @@ pub fn flat(results: &Value, verified: bool) -> Value {
                 "group_low_confidence": median.is_none_or(|m| m.1 < TIMED_ENOUGH),
                 "asset": c["asset"],
                 "asset_step": c["asset_step"],
-            })
+            });
+            // The files written, below the kernel's folder; a case with none has no `exports`.
+            let ex = &c["exports"];
+            if ex.is_object() {
+                row["exports"] = json!({"glb": ex["glb"], "step": ex["step"]});
+            }
+            row
         })
         .collect();
     let passed = counts.get("1e-7").copied().unwrap_or(0);
+    // Where this run's files are published, when it wrote any: a case's `exports` keys follow it.
+    let wrote = cases.iter().any(|c| c["exports"].is_object());
+    let assets = match (
+        wrote,
+        results["suite"].as_str(),
+        results["kernel"]["name"].as_str(),
+        results["kernel"]["version"].as_str(),
+    ) {
+        (true, Some(suite), Some(kernel), Some(version)) => {
+            json!(crate::assets::url(suite, kernel, version, ""))
+        }
+        _ => Value::Null,
+    };
     json!({
         "format": crate::run::RESULTS_FORMAT,
         "kernel": results["kernel"],
         "adapter": results["adapter"],
+        "assets": assets,
         "suite": {"version": results["suite"], "contract": results["contract"]},
         "run": {"unix": results["unix"], "verified": verified},
         "environment": results["environment"],
@@ -310,6 +330,27 @@ mod tests {
         assert_eq!(flat["cases"][1]["group_median_ms"], 4.0);
         assert_eq!(flat["cases"][1]["group_low_confidence"], true);
         assert_eq!(flat["run"]["verified"], true);
+        assert!(flat["cases"][0].get("exports").is_none());
+    }
+
+    #[test]
+    fn a_flat_report_names_where_each_case_s_files_are_published() {
+        let ex = json!({"glb": "t/a.h.glb", "step": ["t/a.h.step"], "errors": [], "skipped": []});
+        let results = json!({"suite": "1.0.0", "kernel": {"name": "k", "version": "2.1"},
+            "cases": [{"id": "a", "test": "t", "result": "1e-7", "exports": ex},
+                      {"id": "b", "test": "t", "result": "1e-7"}]});
+        let flat = flat(&results, false);
+        assert_eq!(
+            flat["assets"],
+            format!("{}/1.0.0/k/2.1/", crate::assets::ASSET_BASE)
+        );
+        assert_eq!(
+            flat["cases"][0]["exports"],
+            json!({"glb": "t/a.h.glb", "step": ["t/a.h.step"]})
+        );
+        assert!(flat["cases"][1].get("exports").is_none());
+        let none = super::flat(&json!({"cases": []}), false);
+        assert!(none["assets"].is_null());
     }
 
     #[test]
