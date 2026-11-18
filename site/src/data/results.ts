@@ -21,9 +21,27 @@ export type Grade = (typeof GRADES)[number]
 export const RESULTS = GRADES
 export type Result = Grade
 
-// Where the suite publishes each case's shape files: `assets::ASSET_BASE` in suite/src/assets.rs.
-// The report does not carry it.
+// Where shape files are published: `assets::ASSET_BASE` in suite/src/assets.rs. Each kernel's files
+// lie under <suite>/<kernel>/<version>/ there, as its report does in the reports directory. A
+// report names that folder as `assets`; this is for a report written before it did.
 export const ASSET_BASE = 'https://cdn.springcraft.ai/brep-conformance'
+
+// The folder a report's files are in, without its closing slash: null where the run wrote none.
+// A report is its kernel's own word, so `assets` must be the report's own folder on the suite's
+// CDN: no other host, and no other kernel's folder.
+function assetFolder(
+  assets: unknown,
+  suite: string,
+  kernel: string,
+  version: string,
+  at: string,
+): string | null {
+  if (assets === null) return null
+  const own = `${ASSET_BASE}/${suite}/${kernel}/${version}/`
+  if (assets !== undefined && assets !== own)
+    throw new Error(`${at}.assets: ${String(assets)} is not ${own}`)
+  return own.slice(0, -1)
+}
 
 export interface FailPoint {
   p: [number, number, number]
@@ -56,8 +74,10 @@ export interface CaseRow {
   timeMs: number | null
   groupMedianMs: number | null
   groupLowConfidence: boolean
-  asset: string
-  assetStep: boolean
+  // The files this kernel wrote for the case, as URLs: its drawing, null where it drew none, and
+  // one STEP file per solid of its first view, none where it wrote none.
+  glb: string | null
+  steps: string[]
   failure: Failure | null
   checks: Check[]
 }
@@ -92,7 +112,8 @@ export interface Environment {
 export interface Methodology {
   suite: string
   contract: string
-  assetBase: string
+  // Null where the run wrote no shape files.
+  assetBase: string | null
 }
 
 export interface Report {
@@ -158,8 +179,21 @@ function tierOf(result: Result): Tier | null {
   return (TIERS as readonly string[]).includes(result) ? (result as Tier) : null
 }
 
-function parseCase(v: unknown, at: string): CaseRow {
+// One part of a key: a plain name, so a key can hold no query, fragment, escape or climb.
+const PLAIN_NAME = /^[A-Za-z0-9][A-Za-z0-9._+-]*$/
+
+// A report is its kernel's own word, so a key may not climb out of that kernel's files.
+function fileUrl(base: string | null, key: unknown, ext: string, at: string): string | null {
+  if (key === null || key === undefined || base === null) return null
+  if (typeof key !== 'string') throw new Error(`${at}: not a string`)
+  const plain = key.split('/').every(part => PLAIN_NAME.test(part) && !part.includes('..'))
+  if (!plain || !key.endsWith(`.${ext}`)) throw new Error(`${at}: ${key} is not a .${ext} key`)
+  return `${base}/${key}`
+}
+
+function parseCase(v: unknown, at: string, base: string | null): CaseRow {
   const o = obj(v, at)
+  const exports = obj(o.exports ?? {}, `${at}.exports`)
   const test = str(o, 'test', at)
   const result = oneOf(o, 'result', RESULTS, at)
   return {
@@ -175,8 +209,11 @@ function parseCase(v: unknown, at: string): CaseRow {
     timeMs: numOrNull(o, 'time_ms', at),
     groupMedianMs: numOrNull(o, 'group_median_ms', at),
     groupLowConfidence: o.group_low_confidence !== false,
-    asset: str(o, 'asset', at),
-    assetStep: o.asset_step === true,
+    glb: fileUrl(base, exports.glb, 'glb', `${at}.exports.glb`),
+    steps: arr(exports, 'step', `${at}.exports`).flatMap((key, i) => {
+      const url = fileUrl(base, key, 'step', `${at}.exports.step[${i}]`)
+      return url ? [url] : []
+    }),
     failure: o.failure ? oneOf(o, 'failure', FAILURES, at) : null,
     checks: [],
   }
@@ -197,11 +234,14 @@ export function parseReport(raw: unknown, at = 'report'): Report {
   const unix = numOrNull(run, 'unix', `${at}.run`)
   const standIns = obj(o.stand_ins ?? {}, `${at}.stand_ins`)
   const name = str(k, 'name', `${at}.kernel`)
+  const version = str(k, 'version', `${at}.kernel`)
+  const suiteVersion = str(suite, 'version', `${at}.suite`)
+  const assetBase = assetFolder(o.assets, suiteVersion, name, version, at)
   return {
     identity: {
       kernel: name,
       name,
-      version: str(k, 'version', `${at}.kernel`),
+      version,
       declaredTolerance: numOrNull(k, 'tolerance', `${at}.kernel`),
       configuration:
         typeof k.configuration === 'string' && k.configuration ? k.configuration : null,
@@ -216,13 +256,13 @@ export function parseReport(raw: unknown, at = 'report'): Report {
       verified: run.verified === true,
     },
     methodology: {
-      suite: str(suite, 'version', `${at}.suite`),
+      suite: suiteVersion,
       contract: strOr(suite, 'contract', ''),
-      assetBase: ASSET_BASE,
+      assetBase,
     },
     unsupported: arr(o, 'unsupported', at).map(String),
     standIns: Object.fromEntries(Object.entries(standIns).map(([a, b]) => [a, String(b)])),
-    cases: arr(o, 'cases', at).map((c, i) => parseCase(c, `${at}.cases[${i}]`)),
+    cases: arr(o, 'cases', at).map((c, i) => parseCase(c, `${at}.cases[${i}]`, assetBase)),
   }
 }
 
@@ -455,7 +495,6 @@ export interface TestEntry {
   slug: string
   operation: string
   kind: Kind
-  asset: string
   cases: string[]
   kernels: Record<string, TestKernel>
 }
@@ -473,7 +512,6 @@ export function testIndex(latest: Report[]): TestEntry[] {
           slug: c.slug,
           operation: c.operation,
           kind: c.kind,
-          asset: c.asset,
           cases: [],
           kernels: {},
         })
@@ -485,8 +523,18 @@ export function testIndex(latest: Report[]): TestEntry[] {
     }
   }
   for (const [key, entry] of tests) {
+    const listed = new Set<string>()
     for (const [kernel, cs] of rows.get(key)!) {
-      if (!entry.cases.length) entry.cases = cs.map(c => c.id)
+      // Every kernel's cases, each once: a case only a later kernel ran is still one of the test's,
+      // placed after the case it follows in that kernel's report, so the order is the suite's.
+      let prev: string | null = null
+      for (const c of cs) {
+        if (!listed.has(c.id)) {
+          listed.add(c.id)
+          entry.cases.splice(prev === null ? 0 : entry.cases.indexOf(prev) + 1, 0, c.id)
+        }
+        prev = c.id
+      }
       const grade = worstGrade(cs.map(c => c.grade))
       const worst = cs.find(c => c.grade === grade)!
       entry.kernels[kernel] = {
@@ -533,17 +581,6 @@ export function operationIndex(latest: Report[]): OperationEntry[] {
       ),
     }))
     .sort((a, b) => a.operation.localeCompare(b.operation))
-}
-
-// Must match `assets::key` in suite/src/assets.rs: one set of files per case.
-export function assetUrl(
-  base: string,
-  test: string,
-  caseId: string,
-  hash: string,
-  ext: 'glb' | 'step',
-): string {
-  return `${base.replace(/\/$/, '')}/${test}/${caseId}.${hash}.${ext}`
 }
 
 export interface Site {

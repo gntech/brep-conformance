@@ -19,13 +19,36 @@ older link names stays as it was; a rerun on the same suite version replaces the
   each primitive it has no constructor for.
 - `cases`: one row per case: `id`, `test`, `operation` (the test path's first part, its area),
   `kind` (exact, sound or rejection), `result`, `why`, `failure` (geometry or measurement),
-  `time_ms`, the test's `group_median_ms`, and `asset` and `asset_step`, naming its shape files.
+  `time_ms`, the test's `group_median_ms`, and `exports`, the shape files the kernel wrote for it.
 
 A test's URL segment is its path without the area, joined by dashes: `booleans/overlap/spheres` is
-`overlap-spheres` under `booleans`. Its shape files are `<asset base>/<test>/<id>.<asset>.glb`, and
-`.step` where `asset_step` is true, as `assets::key` in the suite names them. The asset base is the
-suite's compiled default, `https://cdn.springcraft.ai/brep-conformance`; the report does not carry
-it.
+`overlap-spheres` under `booleans`.
+
+Every kernel draws its own shape files, and the site shows no others. A case's `exports` holds the
+key of its drawing as `glb`, or null, and in the list `step` the key of a STEP file for each solid
+the case shows: one, two, or none. A case with no `exports` has no files. A key is a path of plain
+names ending in `.glb` or `.step`, such as `<test>/<id>.<hash>.glb`; the site refuses a report with
+any other.
+
+A file's URL is the report's `assets`, its kernel's folder, followed by the key. `assets` must be
+`https://cdn.springcraft.ai/brep-conformance/<suite>/<kernel>/<version>/`: the suite's CDN, then the
+path the report has in the reports directory. The site refuses any other, so that no report names
+another host or another kernel's files. It is null where the run wrote none, and a report written
+before `assets` existed takes that same address.
+
+A test's page shows a case as the selected kernel drew it, and as the first kernel that drew it
+where that one wrote no drawing. A table under the case has a row for each kernel: its result,
+whether the viewer shows its drawing, and the files it wrote, which are its drawing and each STEP
+file, named by its solid's role where there are two. A kernel that wrote a STEP file and no drawing
+still has its STEP file offered, and no link waits on the viewer.
+
+Every file is a link in the page's own HTML, so it works before the page's script runs. When a case
+is shown, the script asks the CDN for each of its files, once, and remembers the answer. Only a file
+the CDN says it does not hold stops being a link: it is struck through, and no click lands on the
+CDN's own error. A file the CDN could not be asked about, as where it allows no request from another
+origin, stays a link and opens in a new tab. Where the CDN has answered for a file, a click fetches
+it and saves it under its own name, since a browser will not download a file from another origin by
+a link alone.
 
 The report does not yet say who wrote a kernel's adapter, which functions a test calls, or a failed
 check's numbers and failing points, so the site shows none of them.

@@ -206,26 +206,6 @@
   display: flex;
   gap: var(--sp-3);
 }
-.bc-file {
-  padding: 7px 14px 6px;
-  border: var(--hairline-void-soft);
-  border-bottom: var(--hairline-void-soft);
-  color: var(--void-ink-1);
-  font: var(--fw-annot) var(--fs-micro-1) / 1 var(--font-annot);
-  letter-spacing: var(--ls-micro);
-  text-transform: uppercase;
-  text-decoration: none;
-}
-.bc-file:hover {
-  border-color: var(--void-ink-1);
-}
-@supports (corner-shape: bevel) {
-  .bc-file {
-    corner-shape: bevel;
-    border-radius: 0 0 var(--cut) 0;
-  }
-}
-
 .bc-points {
   margin-top: var(--sp-6);
 }
@@ -569,31 +549,34 @@
   font-size: 14px;
   overflow-wrap: anywhere;
 }
-.bc-thiscase ul {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-3) var(--sp-6);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-/* A name, a mark with its word and a label are three faces: they sit on one centre line, each on
-   a line of its own height, since their baselines do not agree. */
-.bc-thiscase li {
+.bc-casekernels__result,
+.bc-casekernels__files {
   display: inline-flex;
-  gap: var(--sp-3);
-  align-items: center;
-  font: var(--fw-voice) 14px / 1 var(--font-voice);
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-5);
+  align-items: baseline;
 }
-.bc-thiscase li > * {
-  line-height: 1;
+.bc-dl {
+  font: var(--fw-machine) 12px / 1.4 var(--font-machine);
 }
-/* The name's underline sits below its box, so the box centres on the letters alone. */
-.bc-thiscase li > a {
-  margin-bottom: -3px;
-  padding-bottom: 2px;
+/* A file being asked about is a link drawn quietly, and one the CDN does not hold is struck text in
+   the same place, so nothing moves when the answer comes. */
+.bc-dl[data-state='checking'],
+.bc-dl[data-state='busy'],
+.bc-dl[data-state='missing'] {
+  color: var(--void-ink-3);
 }
-.bc-shape__nostep {
+.bc-dl[data-state='missing'] {
+  text-decoration: line-through;
+}
+.bc-dl[data-state='busy'] {
+  cursor: progress;
+}
+/* The words under viewer change with what is known; the column holds their widest. */
+.bc-casekernels td:nth-child(3) {
+  min-width: 13ch;
+}
+.bc-shape__note {
   align-self: center;
 }
 .bc-points__none {

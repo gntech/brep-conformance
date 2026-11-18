@@ -9,7 +9,8 @@ import {
   type Summary,
 } from '@/data/results'
 import type { PageEntry } from '@/site/page'
-import { packCases, totalTimeMs, type PackedCases } from './cases'
+import { operations } from '../../../../operations/doc'
+import { packCases, pageKey, totalTimeMs, type PackedCases } from './cases'
 
 export interface Release {
   version: string
@@ -23,14 +24,17 @@ export interface Props {
   methodology: Methodology
   summary: Summary
   totalMs: number
-  // The functions the kernel does not offer, and the stand-in sent for each missing constructor.
-  functions: string[]
+  // The functions the kernel does not offer, each with whether the operations pages document it,
+  // and the stand-in sent for each missing constructor.
+  functions: { name: string; documented: boolean }[]
   standIns: Record<string, string>
   cases: PackedCases
   // Every report of this kernel, newest first, this one included.
   releases: Release[]
-  // The release the leaderboard shows for this kernel, when it is not this one.
+  // The release the leaderboard and the tests' pages show for this kernel, when it is not this one.
   current: Release | null
+  // Whether the tests' pages show this report: it is its kernel's latest on the current suite.
+  shown: boolean
   license: string | null
   adapterLicense: string | null
   // The kernel's own maintainers who review its adapter; null for a kernel not in the registry.
@@ -52,6 +56,8 @@ export function entries(): PageEntry<Props>[] {
       speedFactor: s.leaderboard[at]!.speed.factor,
     }
   }
+  const pages = new Map(s.tests.map(t => [pageKey(t.operation, t.slug), new Set(t.cases)]))
+  const documented = new Set(operations().operations.map(o => o.id))
   return s.reports.map(r => {
     const id = r.identity
     const summary = summarize(r.cases)
@@ -74,10 +80,11 @@ export function entries(): PageEntry<Props>[] {
         methodology: r.methodology,
         summary,
         totalMs: totalTimeMs(r.cases),
-        functions: r.unsupported,
+        functions: r.unsupported.map(name => ({ name, documented: documented.has(name) })),
         standIns: r.standIns,
-        cases: packCases(r.cases),
+        cases: packCases(r.cases, pages),
         releases,
+        shown: isShown,
         current:
           !shown || isShown
             ? null
