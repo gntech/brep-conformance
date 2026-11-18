@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { fmt, PageHead, Section } from '@/components'
-import { queryFromUrl, useChromeSearch } from '@/components/search'
+import { useUrlQuery } from '@/components/search'
 import { EmptyState } from '@/ds'
 import { href, url } from '@/site/href'
 import { Grid } from './_home/Grid'
@@ -18,19 +18,7 @@ const n = (x: number) => x.toLocaleString('en-US')
 export default function Home({ suite, cases, kernels, runs, board, groups }: Props) {
   const versions = Object.fromEntries(board.map(r => [r.kernel, r.version]))
   const [picked, setPicked] = useState(() => defaultCompare(board))
-  const [q, setQ] = useState('')
-
-  useEffect(() => setQ(queryFromUrl()), [])
-  useChromeSearch(q, v => {
-    setQ(v)
-    const { pathname, hash } = window.location
-    const search = v.trim() ? `?q=${encodeURIComponent(v)}` : ''
-    window.history.replaceState(null, '', pathname + search + hash)
-    // The search box is in the header and what it narrows is a screen below: bring that up.
-    const grid = document.getElementById('by-test')
-    if (v.trim() && grid && grid.getBoundingClientRect().top > window.innerHeight * 0.6)
-      grid.scrollIntoView({ block: 'start' })
-  })
+  const [q, setQ] = useUrlQuery()
 
   const compare = (kernel: string) => setPicked(p => toggleCompare(p, kernel, kernels))
   const canCompare = kernels.length > COMPARE_MAX
@@ -129,6 +117,7 @@ export default function Home({ suite, cases, kernels, runs, board, groups }: Pro
             suite={suite}
             versions={versions}
             q={q}
+            onSearch={setQ}
           />
         </Section>
       </div>

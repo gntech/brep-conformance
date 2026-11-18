@@ -12,15 +12,35 @@
 
 /* ---- contents ---- */
 
+/* The contents' wrappers take no part in the layout: the button and the list are the grid's. */
+.dx-island,
+.dx-contents {
+  display: contents;
+}
+
 .dx-nav {
   /* Pinned below the site's header, and no taller than what is left of the window. */
   position: sticky;
   top: var(--chrome-h);
   max-height: calc(100vh - var(--chrome-h));
   overflow-y: auto;
-  padding: var(--sp-4) var(--sp-3) var(--sp-8) 0;
+  padding: 0 var(--sp-3) var(--sp-8) 0;
+  /* Keeps the link that follows the section in view from landing under the search box. */
+  scroll-padding-top: 88px;
   /* It scrolls with the wheel and follows the section in view, so it needs no scrollbar. */
   scrollbar-width: none;
+}
+/* The box stays put while the contents scroll under it. */
+.dx-nav .bc-search {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  max-width: none;
+  padding: var(--sp-4) 0 var(--sp-5);
+  background: var(--ground-void);
+}
+.dx-nav__none {
+  margin: var(--sp-4) 0 0;
 }
 .dx-nav::-webkit-scrollbar {
   display: none;
@@ -33,9 +53,6 @@
 /* Named with the script's own class, to outrank the rule that folds every group but one. */
 .dx-nav--js.dx-nav--finding .dx-nav__g > ul {
   display: block;
-}
-.dx-nav li[hidden] {
-  display: none;
 }
 .dx-nav a {
   display: block;
@@ -331,5 +348,9 @@
     padding: var(--sp-5) var(--sp-4);
     background: var(--ground-void);
     border-right: var(--hairline-void-soft);
+  }
+  .dx-nav .bc-search {
+    position: static;
+    padding-top: 0;
   }
 }

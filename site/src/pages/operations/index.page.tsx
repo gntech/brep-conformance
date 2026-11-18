@@ -1,16 +1,28 @@
-import { fmt, GradeMark, PageHead } from '@/components'
-import { takeSearch } from '@/components/search'
+import { fmt, GradeMark, PageHead, SearchBox } from '@/components'
+import { useUrlQuery } from '@/components/search'
 import { href, url } from '@/site/href'
 import './operations.css'
 import type { Props } from './index.data'
 
 export const nav = { label: 'operations', order: 2 }
+export const hydrate = true
 
 // Reference: every operation the suite specifies, and which kernels offer it, a column per kernel
 // so a kernel reads down the page. What a kernel offers is a fact of one run of one version, so
 // each column names its run and links to its report; how it does is the results page's, not this
-// one's. The page ships no data; `enhance` lets the header's search filter the rows already drawn.
+// one's. Its search box narrows the rows to the operations and groups that hold every word.
 export default function OperationsIndex({ total, suites, kernels, groups }: Props) {
+  const [q, setQ] = useUrlQuery()
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const shown = groups
+    .map(g => ({
+      ...g,
+      rows: g.functions.filter(f => {
+        const text = `${f.id} ${g.group}`.toLowerCase()
+        return words.every(w => text.includes(w))
+      }),
+    }))
+    .filter(g => g.rows.length)
   return (
     <>
       <div className="fn-page">
@@ -20,6 +32,12 @@ export default function OperationsIndex({ total, suites, kernels, groups }: Prop
             Suite {suites.join(', ')} · {total} operations ·{' '}
             <a href={href('/docs/#constructors')}>how each is specified</a>
           </p>
+          <SearchBox
+            label="search operations"
+            placeholder="e.g. fillet"
+            value={q}
+            onChange={setQ}
+          />
         </div>
         <table className="fn-table">
           <thead>
@@ -56,7 +74,7 @@ export default function OperationsIndex({ total, suites, kernels, groups }: Prop
               ))}
             </tr>
           </thead>
-          {groups.map(g => (
+          {shown.map(g => (
             <tbody key={g.group} data-group="">
               <tr className="fn-group">
                 <th scope="rowgroup">
@@ -86,8 +104,8 @@ export default function OperationsIndex({ total, suites, kernels, groups }: Prop
                   </td>
                 ))}
               </tr>
-              {g.functions.map(f => (
-                <tr key={f.id} data-fn={`${f.id} ${g.group}`.toLowerCase()}>
+              {g.rows.map(f => (
+                <tr key={f.id} data-fn="">
                   <th scope="row">
                     <span className="fn-cell">
                       <a href={url.operation(f.id)}>{f.id}</a>
@@ -118,24 +136,8 @@ export default function OperationsIndex({ total, suites, kernels, groups }: Prop
             </tbody>
           ))}
         </table>
-        <p className="bc-annot fn-none" id="fn-none" hidden>
-          no operation matches
-        </p>
+        {!shown.length && <p className="bc-annot fn-none">no operation matches</p>}
       </div>
     </>
   )
-}
-
-export function enhance() {
-  const rows = [...document.querySelectorAll<HTMLElement>('tr[data-fn]')]
-  const groups = [...document.querySelectorAll<HTMLElement>('tbody[data-group]')]
-  const none = document.getElementById('fn-none')
-  const apply = (q: string) => {
-    const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
-    for (const r of rows) r.hidden = !words.every(w => r.dataset.fn!.includes(w))
-    for (const g of groups) g.hidden = !g.querySelector('tr[data-fn]:not([hidden])')
-    const shown = rows.filter(r => !r.hidden).length
-    if (none) none.hidden = shown > 0
-  }
-  takeSearch(apply)
 }
