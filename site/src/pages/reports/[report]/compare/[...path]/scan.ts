@@ -1,7 +1,8 @@
 // The Scan view: the shape as a shaded solid with its edges, drawn by WebGL2 (gl.ts), and a
 // kernel's misplaced points over it on a 2D canvas, which also takes the pointer. Orthographic,
 // z up, turned by dragging.
-import { Renderer, type Mesh, type Rgb } from './gl'
+import { Renderer, type Mesh, type OverlayGeometry, type Rgb } from './gl'
+import type { Overlay } from './glb'
 import type { Vec3 } from './vec'
 
 export interface Mark {
@@ -17,8 +18,13 @@ export interface Ghost extends Mesh {
 }
 
 export interface Scene extends Mesh {
+  // The second subject, in its own tone: so two parts that clash, a part and its mirror image, or
+  // the pieces of a split read apart where they meet.
+  alt: Mesh
   ghosts: Ghost[]
   marks: Mark[]
+  // What the case lays over its views: dots at its points, a box, a plane.
+  overlay?: Overlay
   // The box every view is fitted to, when it should stay put as the scene changes.
   frame?: { lo: Vec3; hi: Vec3 }
 }
@@ -33,6 +39,26 @@ export interface View {
 }
 
 export const HOME: View = { yaw: -Math.PI / 4 - 0.35, pitch: 0.5, zoom: 1, pan: [0, 0] }
+
+// The view a scene opens on: HOME, or for a case about a plane, HOME turned to look nearly along the
+// plane, a little from one side: the pieces either side of it, and the cut between them, are seen
+// side by side, where looking across the plane puts the near piece in front of the cut.
+const ALONG_PLANE = 0.12
+
+export function homeOf(o: Overlay | undefined): View {
+  const n = o?.plane?.normal
+  const len = n ? Math.hypot(...n) : 0
+  if (!n || !len) return { ...HOME }
+  const z = n.map(x => x / len)
+  const cp = Math.cos(HOME.pitch)
+  const home: Vec3 = [cp * Math.cos(HOME.yaw), cp * Math.sin(HOME.yaw), Math.sin(HOME.pitch)]
+  const across = home[0] * z[0]! + home[1] * z[1]! + home[2] * z[2]!
+  const side = across < 0 ? -1 : 1
+  const t = [0, 1, 2].map(k => home[k]! - across * z[k]! + ALONG_PLANE * side * z[k]!)
+  const tl = Math.hypot(...t)
+  if (tl < 1e-9) return { ...HOME }
+  return { ...HOME, yaw: Math.atan2(t[1]!, t[0]!), pitch: Math.asin(t[2]! / tl) }
+}
 
 const ZOOM_MIN = 0.2
 const ZOOM_MAX = 500
@@ -106,8 +132,12 @@ export function project(c: Camera, x: number, y: number, z: number): [number, nu
 interface Colors {
   edge: Rgb
   face: Rgb
+  faceAlt: Rgb
   ghost: [Rgb, Rgb]
   fail: string
+  // The overlay's dots, and its box and plane.
+  dot: Rgb
+  guide: Rgb
   focus: string
   annot: string
 }
@@ -125,10 +155,13 @@ function colorsOf(el: Element): Colors {
   const s = getComputedStyle(el)
   const v = (name: string, fallback: string) => s.getPropertyValue(name).trim() || fallback
   return {
-    edge: rgbOf(v('--scan-edge', '#3a3c3e')),
+    edge: rgbOf(v('--scan-edge', '#000000')),
     face: rgbOf(v('--scan-face', '#8a8c8e')),
+    faceAlt: rgbOf(v('--scan-face-alt', '#7f97a8')),
     ghost: [rgbOf(v('--scan-ghost', '#4fb3ff')), rgbOf(v('--scan-ghost2', '#f5a200'))],
     fail: v('--scan-fail', '#ff5a33'),
+    dot: rgbOf(v('--scan-dot', '#f5a200')),
+    guide: rgbOf(v('--scan-guide', '#a2a4a6')),
     focus: v('--scan-focus', '#f5a200'),
     annot: v('--scan-annot', '#6a6c6e'),
   }
@@ -149,7 +182,7 @@ export function frameOf(scene: Scene): { lo: Vec3; hi: Vec3 } {
     lo: [Infinity, Infinity, Infinity] as Vec3,
     hi: [-Infinity, -Infinity, -Infinity] as Vec3,
   }
-  for (const s of [scene, ...scene.ghosts]) {
+  for (const s of [scene, scene.alt, ...scene.ghosts]) {
     grow(b, s.positions)
     grow(b, s.edges)
   }
@@ -173,6 +206,7 @@ function overlay(
   focus: number,
 ) {
   ctx.clearRect(0, 0, c.w, c.h)
+
   ctx.lineWidth = 1.5
   scene.marks.forEach((m, i) => {
     const [x, y] = project(c, ...m.p)
@@ -183,6 +217,80 @@ function overlay(
     if (i === focus) reticle(ctx, x, y, col.focus)
   })
   triad(ctx, c, col.annot)
+}
+
+// How far past the solid's box a plane is drawn, as a share of the box's size each way.
+const PLANE_MARGIN = 0.08
+
+// The case's overlay as the GPU draws it: a plane as the polygon it cuts from the box `within`
+// (the solid's, a little grown), which reaches past the solid on every side as an endless plane
+// does without filling the view; a box as its twelve edges; the points as they are.
+export function overlayGeometry(
+  o: Overlay | undefined,
+  within: { lo: Vec3; hi: Vec3 },
+): OverlayGeometry {
+  const none = new Float32Array(0)
+  if (!o) return { plane: none, planeEdges: none, box: none, points: none }
+  let plane = none
+  let planeEdges = none
+  if (o.plane) {
+    const { origin, normal: n } = o.plane
+    const grow = [0, 1, 2].map(k => PLANE_MARGIN * (within.hi[k]! - within.lo[k]!))
+    const lo = within.lo.map((x, k) => x - grow[k]!)
+    const hi = within.hi.map((x, k) => x + grow[k]!)
+    const corner = (i: number) => [
+      i & 1 ? hi[0]! : lo[0]!,
+      i & 2 ? hi[1]! : lo[1]!,
+      i & 4 ? hi[2]! : lo[2]!,
+    ]
+    const side = (p: number[]) => [0, 1, 2].reduce((s, k) => s + n[k]! * (p[k]! - origin[k]!), 0)
+    // Where the plane crosses each of the box's edges.
+    const cut: number[][] = []
+    for (let i = 0; i < 8; i++)
+      for (const bit of [1, 2, 4]) {
+        if (i & bit) continue
+        const [a, b] = [corner(i), corner(i | bit)]
+        const [da, db] = [side(a), side(b)]
+        if (da < 0 === db < 0 || da === db) continue
+        const t = da / (da - db)
+        cut.push([0, 1, 2].map(k => a[k]! + t * (b[k]! - a[k]!)))
+      }
+    if (cut.length >= 3) {
+      // In order round their centre, by their angle in the plane.
+      const c = [0, 1, 2].map(k => cut.reduce((s, p) => s + p[k]!, 0) / cut.length)
+      const len = Math.hypot(...n) || 1
+      const z = n.map(x => x / len)
+      const seed = Math.abs(z[0]!) < 0.9 ? [1, 0, 0] : [0, 1, 0]
+      const dz = seed.reduce((s, x, k) => s + x * z[k]!, 0)
+      const u = seed.map((x, k) => x - dz * z[k]!)
+      const v = [
+        z[1]! * u[2]! - z[2]! * u[1]!,
+        z[2]! * u[0]! - z[0]! * u[2]!,
+        z[0]! * u[1]! - z[1]! * u[0]!,
+      ]
+      const angle = (p: number[]) => {
+        const d = p.map((x, k) => x - c[k]!)
+        return Math.atan2(
+          d.reduce((s, x, k) => s + x * v[k]!, 0),
+          d.reduce((s, x, k) => s + x * u[k]!, 0),
+        )
+      }
+      cut.sort((p, q) => angle(p) - angle(q))
+      const ring = cut.map((p, i) => [p, cut[(i + 1) % cut.length]!] as const)
+      plane = Float32Array.from(ring.flatMap(([p, q]) => [...c, ...p, ...q]))
+      planeEdges = Float32Array.from(ring.flatMap(([p, q]) => [...p, ...q]))
+    }
+  }
+  let box = none
+  if (o.box) {
+    const [lo, hi] = o.box
+    const at = (i: number) => [i & 1 ? hi[0] : lo[0], i & 2 ? hi[1] : lo[1], i & 4 ? hi[2] : lo[2]]
+    const ends: number[] = []
+    for (let i = 0; i < 8; i++)
+      for (const bit of [1, 2, 4]) if (!(i & bit)) ends.push(...at(i), ...at(i | bit))
+    box = Float32Array.from(ends)
+  }
+  return { plane, planeEdges, box, points: Float32Array.from(o.points.flat()) }
 }
 
 // The lock-on reticle: four corner brackets round the focused point.
@@ -249,13 +357,14 @@ export function mountScan(
   const renderer = new Renderer(surface)
   let scene = initial
   let frame = frameOf(scene)
-  let view = { ...HOME }
+  let view = homeOf(scene.overlay)
   let focused = -1
   let w = 0
   let h = 0
   let queued = 0
   const colors = colorsOf(canvas)
-  renderer.set(scene, scene.ghosts)
+  renderer.set(scene, scene.alt, scene.ghosts)
+  renderer.setOverlay(overlayGeometry(scene.overlay, frame))
 
   const render = () => {
     queued = 0
@@ -282,7 +391,14 @@ export function mountScan(
         reach: c.radius * 1.01,
         dpr,
       },
-      { face: colors.face, edge: colors.edge, ghost: colors.ghost },
+      {
+        face: colors.face,
+        faceAlt: colors.faceAlt,
+        edge: colors.edge,
+        ghost: colors.ghost,
+        guide: colors.guide,
+        dot: colors.dot,
+      },
     )
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     overlay(ctx, scene, c, colors, focused)
@@ -416,10 +532,14 @@ export function mountScan(
 
   return {
     set(next) {
+      // A case about another plane opens on its own view; the same plane keeps the reader's.
+      if (JSON.stringify(next.overlay?.plane) !== JSON.stringify(scene.overlay?.plane))
+        view = homeOf(next.overlay)
       scene = next
       frame = frameOf(scene)
       focused = -1
-      renderer.set(scene, scene.ghosts)
+      renderer.set(scene, scene.alt, scene.ghosts)
+      renderer.setOverlay(overlayGeometry(scene.overlay, frame))
       redraw()
     },
     focus(i) {
@@ -427,7 +547,7 @@ export function mountScan(
       redraw()
     },
     reset() {
-      view = { ...HOME }
+      view = homeOf(scene.overlay)
       redraw()
     },
     destroy() {
