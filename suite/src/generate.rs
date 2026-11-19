@@ -2,7 +2,7 @@
 //! their booleans. A family's version is part of every case id it makes, so changing what a family
 //! draws for a seed means bumping it.
 
-use std::f64::consts::{PI, TAU};
+use std::f64::consts::{FRAC_PI_2, FRAC_PI_4, PI, TAU};
 
 use crate::model::{Frame, Op, PathSeg, Primitive, Rigid, Shape, Side, Spline, Vec3};
 use crate::portable::Portable;
@@ -11,6 +11,7 @@ use crate::profile::{Profile, Seg, chamfered, circle, rounded};
 mod blends;
 mod chains;
 mod drawing;
+mod edits;
 mod hard;
 mod parts;
 mod paths;
@@ -949,6 +950,180 @@ pub const FEATURE_FAMILIES: &[FeatureFamily] = &[
         version: 1,
         count: 24,
         draw: delete_face,
+    },
+    FeatureFamily {
+        name: "deleted-rim-rounds",
+        version: 1,
+        count: 3,
+        draw: |r| edits::turned_delete(r, edits::Turned::RimRound),
+    },
+    FeatureFamily {
+        name: "deleted-rim-bevels",
+        version: 1,
+        count: 3,
+        draw: |r| edits::turned_delete(r, edits::Turned::RimBevel),
+    },
+    FeatureFamily {
+        name: "deleted-foot-rounds",
+        version: 1,
+        count: 3,
+        draw: |r| edits::turned_delete(r, edits::Turned::FootRound),
+    },
+    FeatureFamily {
+        name: "deleted-dome-rounds",
+        version: 1,
+        count: 3,
+        draw: |r| edits::turned_delete(r, edits::Turned::DomeRound),
+    },
+    FeatureFamily {
+        name: "deleted-hemisphere-rounds",
+        version: 1,
+        count: 3,
+        draw: |r| edits::turned_delete(r, edits::Turned::HemisphereRound),
+    },
+    FeatureFamily {
+        name: "deleted-bore-rounds",
+        version: 1,
+        count: 3,
+        draw: |r| edits::turned_delete(r, edits::Turned::BoreRound),
+    },
+    FeatureFamily {
+        name: "deleted-bore-grooves",
+        version: 1,
+        count: 3,
+        draw: |r| edits::turned_delete(r, edits::Turned::BoreGroove),
+    },
+    FeatureFamily {
+        name: "deleted-countersinks",
+        version: 1,
+        count: 3,
+        draw: |r| edits::turned_delete(r, edits::Turned::Countersink),
+    },
+    FeatureFamily {
+        name: "deleted-bosses",
+        version: 1,
+        count: 4,
+        draw: |r| edits::removal_delete(r, edits::Removal::Boss),
+    },
+    FeatureFamily {
+        name: "deleted-root-rounds",
+        version: 1,
+        count: 4,
+        draw: |r| edits::removal_delete(r, edits::Removal::RootRound),
+    },
+    FeatureFamily {
+        name: "deleted-inside-rounds",
+        version: 1,
+        count: 4,
+        draw: |r| edits::removal_delete(r, edits::Removal::InsideRound),
+    },
+    FeatureFamily {
+        name: "frustum-shells-open-bottom",
+        version: 1,
+        count: 6,
+        draw: |r| edits::frustum_shell(r, edits::Opened::WideBottom),
+    },
+    FeatureFamily {
+        name: "frustum-shells-open-top",
+        version: 1,
+        count: 6,
+        draw: |r| edits::frustum_shell(r, edits::Opened::NarrowTop),
+    },
+    FeatureFamily {
+        name: "frustum-shells-closed",
+        version: 1,
+        count: 6,
+        draw: |r| edits::frustum_shell(r, edits::Opened::Closed),
+    },
+    FeatureFamily {
+        name: "ball-shells",
+        version: 1,
+        count: 4,
+        draw: |r| edits::curved_shell(r, edits::Curved::Ball),
+    },
+    FeatureFamily {
+        name: "cone-shells-open-base",
+        version: 1,
+        count: 4,
+        draw: |r| edits::curved_shell(r, edits::Curved::ConeOpen),
+    },
+    FeatureFamily {
+        name: "cone-shells-closed",
+        version: 1,
+        count: 4,
+        draw: |r| edits::curved_shell(r, edits::Curved::ConeClosed),
+    },
+    FeatureFamily {
+        name: "puck-shells-within-rounds",
+        version: 1,
+        count: 5,
+        draw: |r| edits::puck_shell(r, false),
+    },
+    FeatureFamily {
+        name: "puck-shells-past-rounds",
+        version: 1,
+        count: 5,
+        draw: |r| edits::puck_shell(r, true),
+    },
+    FeatureFamily {
+        name: "stepped-shells",
+        version: 1,
+        count: 8,
+        draw: edits::l_shell,
+    },
+    FeatureFamily {
+        name: "stepped-shells-leaning-back",
+        version: 1,
+        count: 4,
+        draw: |r| edits::leaning_l_shell(r, 3.0 * FRAC_PI_4),
+    },
+    FeatureFamily {
+        name: "stepped-shells-leaning-over",
+        version: 1,
+        count: 4,
+        draw: |r| edits::leaning_l_shell(r, FRAC_PI_4),
+    },
+    FeatureFamily {
+        name: "offset-tori",
+        version: 1,
+        count: 4,
+        draw: |r| edits::torus_offset(r, false),
+    },
+    FeatureFamily {
+        name: "offset-tori-past-the-hole",
+        version: 1,
+        count: 6,
+        draw: |r| edits::torus_offset(r, true),
+    },
+    FeatureFamily {
+        name: "offset-root-rounds",
+        version: 1,
+        count: 4,
+        draw: |r| edits::root_round_offset(r, false, false),
+    },
+    FeatureFamily {
+        name: "offset-root-rounds-past",
+        version: 1,
+        count: 4,
+        draw: |r| edits::root_round_offset(r, false, true),
+    },
+    FeatureFamily {
+        name: "offset-cone-roots",
+        version: 1,
+        count: 3,
+        draw: |r| edits::root_round_offset(r, true, false),
+    },
+    FeatureFamily {
+        name: "offset-cone-roots-past",
+        version: 1,
+        count: 3,
+        draw: |r| edits::root_round_offset(r, true, true),
+    },
+    FeatureFamily {
+        name: "offset-cones-to-apex",
+        version: 1,
+        count: 6,
+        draw: edits::apex_offset,
     },
     FeatureFamily {
         name: "move-faces",
@@ -7757,13 +7932,13 @@ mod tests {
     fn the_default_seed_draws_the_same_ids_on_every_platform() {
         let ids: Vec<String> = cases(1).into_iter().map(|c| c.id).collect();
         let got = format!("{:016x}", fnv(&ids.join("\n")));
-        if got != "ed2d45f7e28c6ad7" {
+        if got != "855c148b0b9e2297" {
             // Every id, so a run elsewhere can be compared with this one case by case.
             for id in &ids {
                 eprintln!("id {id}");
             }
         }
-        assert_eq!(got, "ed2d45f7e28c6ad7");
+        assert_eq!(got, "855c148b0b9e2297");
     }
 
     #[test]

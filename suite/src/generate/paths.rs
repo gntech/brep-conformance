@@ -276,6 +276,33 @@ pub fn test_path(c: &Case) -> &'static str {
         "offset-faces" => "modify/push-pull-faces",
         "closing-offsets" => "modify/push-faces-until-they-merge",
         "delete-faces" => "modify/delete-faces",
+        "deleted-rim-rounds"
+        | "deleted-rim-bevels"
+        | "deleted-foot-rounds"
+        | "deleted-dome-rounds"
+        | "deleted-hemisphere-rounds"
+        | "deleted-bore-rounds"
+        | "deleted-bore-grooves"
+        | "deleted-countersinks" => "modify/delete-faces-of-turned-parts",
+        "deleted-bosses" | "deleted-root-rounds" | "deleted-inside-rounds" => {
+            "modify/delete-faces-taking-material-away"
+        }
+        "frustum-shells-open-bottom" | "frustum-shells-open-top" | "frustum-shells-closed" => {
+            "modify/shell-frustum"
+        }
+        "ball-shells" | "cone-shells-open-base" | "cone-shells-closed" => {
+            "modify/shell-ball-or-cone"
+        }
+        "puck-shells-within-rounds" | "puck-shells-past-rounds" => "modify/shell-rounded-puck",
+        "stepped-shells" | "stepped-shells-leaning-back" | "stepped-shells-leaning-over" => {
+            "modify/shell-l-prism-open-at-its-step"
+        }
+        "offset-tori" | "offset-tori-past-the-hole" => "modify/offset-torus",
+        "offset-root-rounds"
+        | "offset-root-rounds-past"
+        | "offset-cone-roots"
+        | "offset-cone-roots-past" => "modify/offset-boss-with-a-root-round",
+        "offset-cones-to-apex" => "modify/offset-cone-to-its-apex",
         "move-faces" => "modify/move-faces",
         "thicken" => "modify/thicken-faces",
         "sewing" => "modify/sew-faces-into-a-solid",
