@@ -9,6 +9,20 @@ use crate::generate::Case;
 use crate::model::{Frame, Op, Primitive, Shape, Vec3};
 use crate::oracle;
 
+/// The keys of what a case's views lay over its drawing, which the export copies into the file.
+pub const OVERLAY: &[&str] = &[
+    "points",
+    "box",
+    "plane",
+    "lines",
+    "look",
+    "clashes",
+    "closest",
+    "sides",
+    "normals",
+    "curvature",
+];
+
 thread_local! {
     /// The shapes of the case whose views are being drawn up, each once, by its JSON's text.
     static TABLE: std::cell::RefCell<Vec<(String, Value)>> = const { std::cell::RefCell::new(Vec::new()) };
@@ -421,14 +435,23 @@ pub fn views(c: &Case) -> Value {
             })
             .collect();
         extra["points"] = json!(pts);
-        vec![
-            noted(
-                "after",
-                "The expected result of every step, the starting solid faint behind it; dots mark the edges or faces the steps name.",
-                vec![solid("main", b, None), ghost_outside(a, b)],
-            ),
-            view("before", vec![solid("main", a, None)]),
-        ]
+        if c.test.starts_with("parts/") {
+            // A part's test is the finished shape; the blank its recipe starts from says little.
+            vec![noted(
+                "part",
+                "The finished part; dots mark the edges or faces its steps name.",
+                vec![solid("main", b, None)],
+            )]
+        } else {
+            vec![
+                noted(
+                    "after",
+                    "The expected result of every step, the starting solid faint behind it; dots mark the edges or faces the steps name.",
+                    vec![solid("main", b, None), ghost_outside(a, b)],
+                ),
+                view("before", vec![solid("main", a, None)]),
+            ]
+        }
     } else if c.refuse && c.exact.loft.is_none() {
         // A constructor's input the contract rules out: the input itself, as the suite reads it.
         vec![noted(
@@ -514,18 +537,21 @@ pub fn views(c: &Case) -> Value {
             ),
         ]
     } else if let Some(asm) = &c.exact.assembly {
+        let pairs: Vec<[usize; 2]> = asm.clashes.iter().map(|x| [x.i, x.j]).collect();
         let parts: Vec<Value> = asm
             .parts
             .iter()
             .enumerate()
             .map(|(k, (i, place))| {
-                let role = if k % 2 == 0 { "main" } else { "alt" };
+                let clashes = pairs.iter().any(|p| p.contains(&k));
+                let role = if clashes { "alt" } else { "main" };
                 solid(role, &Shape::Prim(asm.shapes[*i].clone()), Some(*place))
             })
             .collect();
+        extra["clashes"] = json!(pairs);
         vec![noted(
             "parts",
-            "The parts at their placements; the kernel must find which pairs clash.",
+            "The parts at their placements; those in the second tone clash with another, which the kernel must find.",
             parts,
         )]
     } else if let Some(l) = &c.exact.loft {
@@ -567,9 +593,19 @@ pub fn views(c: &Case) -> Value {
         )]
     } else if let Some(cv) = &c.exact.curvature {
         extra["points"] = json!(cv.points);
+        // Where the boundary lies nearest each point, its normal, its first principal direction and
+        // both curvatures, for the viewer to draw the directions as ticks on the surface.
+        let frames: Vec<Value> = c
+            .exact
+            .curvature_frames
+            .iter()
+            .zip(&cv.want)
+            .map(|(f, k)| json!({"foot": f.foot, "n": f.normal, "d1": f.d1, "k": k}))
+            .collect();
+        extra["curvature"] = Value::Array(frames);
         vec![noted(
             "solid",
-            "Dots mark the points: each asks for the principal curvatures where the boundary lies nearest it.",
+            "Each point lies a little off the surface, inside or out; the kernel must find where the surface lies nearest it, at the end of its stick, and give the principal curvatures there. Ticks run along their directions: blue where the surface bends outward, violet where inward, grey where it is flat.",
             vec![solid("main", a, None)],
         )]
     } else if let Some(dr) = &c.exact.drawing {
@@ -628,7 +664,7 @@ pub fn views(c: &Case) -> Value {
         vec![
             noted(
                 "loose faces",
-                "Each face is written on its own, apart from its neighbours by up to 0.0001 mm; gold faces are written inside out. Drawn pulled apart.",
+                "Each face is written on its own, apart from its neighbours by up to 0.0001 mm; faces in the second tone are written inside out. Drawn pulled apart.",
                 plates,
             ),
             noted(
@@ -637,6 +673,12 @@ pub fn views(c: &Case) -> Value {
                 vec![solid("main", a, None)],
             ),
         ]
+    } else if !c.exact.sides.is_empty() {
+        vec![noted(
+            "solid",
+            "Each probe is a point on the surface and, where the surface has a normal, points 0.01 mm inside and outside it, drawn spread apart; the kernel must say which side each is on.",
+            vec![solid("main", a, None)],
+        )]
     } else if c.step || c.exact.sew.is_some() || a == b {
         vec![view("solid", vec![solid("main", a, None)])]
     } else {
@@ -646,9 +688,136 @@ pub fn views(c: &Case) -> Value {
 }
 
 fn finish_views(c: &Case, mut extra: Value, v: Vec<Value>) -> Value {
+    // The answers a point query is checked against, laid over whichever view the case draws.
+    let e = &c.exact;
+    if !e.closest.is_empty() {
+        let at = |(p, d, foot): &(Vec3, f64, Option<Vec3>)| json!({"at": p, "distance": d, "foot": foot});
+        extra["closest"] = e.closest.iter().map(at).collect();
+    }
+    if !e.sides.is_empty() {
+        let at = |(p, side): &(Vec3, crate::model::Side)| json!({"at": p, "side": side.word()});
+        extra["sides"] = e.sides.iter().map(at).collect();
+    }
+    if let Some(n) = &e.normals {
+        let at = |(p, normal): &(Vec3, Option<Vec3>)| json!({"at": p, "n": normal});
+        extra["normals"] = n.points.iter().map(at).collect();
+    }
     extra["cell"] = json!(cell(&c.a, &c.b, c));
     extra["views"] = Value::Array(v);
     extra["shapes"] =
         TABLE.with(|t| Value::Array(t.borrow_mut().drain(..).map(|(_, v)| v).collect()));
     extra
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn views_lay_over_every_query_answer_the_case_holds() {
+        let mut seen = [0; 4];
+        for c in crate::generate::cases(1) {
+            let spec = views(&c);
+            let e = &c.exact;
+            if !e.closest.is_empty() {
+                seen[0] += 1;
+                let got = spec["closest"].as_array().expect(&c.id);
+                assert_eq!(got.len(), e.closest.len(), "{}", c.id);
+                for (g, (at, d, foot)) in got.iter().zip(&e.closest) {
+                    assert_eq!(g["at"], json!(at), "{}", c.id);
+                    assert_eq!(g["distance"], json!(d), "{}", c.id);
+                    assert_eq!(g["foot"], json!(foot), "{}", c.id);
+                }
+            }
+            if !e.sides.is_empty() {
+                seen[1] += 1;
+                let got = spec["sides"].as_array().expect(&c.id);
+                assert_eq!(got.len(), e.sides.len(), "{}", c.id);
+                for (g, (at, side)) in got.iter().zip(&e.sides) {
+                    assert_eq!(g["at"], json!(at), "{}", c.id);
+                    assert_eq!(g["side"], side.word(), "{}", c.id);
+                }
+            }
+            if let Some(n) = &e.normals {
+                seen[2] += 1;
+                let got = spec["normals"].as_array().expect(&c.id);
+                assert_eq!(got.len(), n.points.len(), "{}", c.id);
+                for (g, (at, normal)) in got.iter().zip(&n.points) {
+                    assert_eq!(g["at"], json!(at), "{}", c.id);
+                    assert_eq!(g["n"], json!(normal), "{}", c.id);
+                }
+            }
+            if let Some(asm) = &e.assembly {
+                seen[3] += 1;
+                let pairs: Vec<[usize; 2]> = asm.clashes.iter().map(|x| [x.i, x.j]).collect();
+                assert_eq!(spec["clashes"], json!(pairs), "{}", c.id);
+                // Only a part that clashes with another is drawn in the second tone.
+                let parts = spec["views"][0]["solids"].as_array().unwrap();
+                for (k, s) in parts.iter().enumerate() {
+                    let clashes = pairs.iter().any(|p| p.contains(&k));
+                    assert_eq!(
+                        s["role"],
+                        if clashes { "alt" } else { "main" },
+                        "{} {k}",
+                        c.id
+                    );
+                }
+            }
+        }
+        assert!(seen.iter().all(|&n| n > 0), "{seen:?}");
+    }
+
+    #[test]
+    fn a_part_is_one_view_of_the_finished_part_and_other_chains_keep_before_and_after() {
+        let (mut parts, mut chains) = (0, 0);
+        for c in crate::generate::cases(1) {
+            if c.exact.chain.is_none() {
+                continue;
+            }
+            let spec = views(&c);
+            let v = spec["views"].as_array().unwrap();
+            let names: Vec<&str> = v.iter().map(|x| x["name"].as_str().unwrap()).collect();
+            if c.test.starts_with("parts/") {
+                parts += 1;
+                assert_eq!(names, ["part"], "{}", c.id);
+                let solids = v[0]["solids"].as_array().unwrap();
+                assert_eq!(solids.len(), 1, "{}", c.id);
+                assert_eq!(solids[0]["role"], "main", "{}", c.id);
+            } else {
+                chains += 1;
+                assert_eq!(names, ["after", "before"], "{}", c.id);
+            }
+        }
+        assert!(parts > 0 && chains > 0, "{parts} {chains}");
+    }
+
+    #[test]
+    fn a_curvature_case_lays_over_each_point_its_foot_normal_and_principal_direction() {
+        let mut seen = 0;
+        for c in crate::generate::cases(1) {
+            let Some(cv) = &c.exact.curvature else {
+                continue;
+            };
+            seen += 1;
+            let got = views(&c)["curvature"].as_array().expect(&c.id).clone();
+            assert_eq!(got.len(), cv.points.len(), "{}", c.id);
+            for (g, k) in got.iter().zip(&cv.want) {
+                let v = |key: &str| -> Vec3 {
+                    let a = g[key].as_array().unwrap();
+                    [0, 1, 2].map(|i| a[i].as_f64().unwrap())
+                };
+                let (n, d) = (v("n"), v("d1"));
+                let dot = n[0] * d[0] + n[1] * d[1] + n[2] * d[2];
+                let len = |x: Vec3| (x[0] * x[0] + x[1] * x[1] + x[2] * x[2]).sqrt();
+                assert!(
+                    (len(n) - 1.0).abs() < 1e-9 && (len(d) - 1.0).abs() < 1e-9,
+                    "{}",
+                    c.id
+                );
+                assert!(dot.abs() < 1e-9, "{}: d1 not square to n", c.id);
+                assert_eq!(g["k"], json!(k), "{}", c.id);
+            }
+        }
+        assert!(seen > 0);
+    }
 }

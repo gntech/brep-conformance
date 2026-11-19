@@ -2,7 +2,7 @@
 // kernel's misplaced points over it on a 2D canvas, which also takes the pointer. Orthographic,
 // z up, turned by dragging.
 import { Renderer, type Mesh, type OverlayGeometry, type Rgb } from './gl'
-import type { Overlay } from './glb'
+import type { Overlay, Side } from './glb'
 import type { Vec3 } from './vec'
 
 export interface Mark {
@@ -46,6 +46,11 @@ export const HOME: View = { yaw: -Math.PI / 4 - 0.35, pitch: 0.5, zoom: 1, pan: 
 const ALONG_PLANE = 0.12
 
 export function homeOf(o: Overlay | undefined): View {
+  const look = o?.look
+  const ll = look ? Math.hypot(...look) : 0
+  if (look && ll) {
+    return { ...HOME, yaw: Math.atan2(look[1], look[0]), pitch: Math.asin(look[2] / ll) }
+  }
   const n = o?.plane?.normal
   const len = n ? Math.hypot(...n) : 0
   if (!n || !len) return { ...HOME }
@@ -135,9 +140,12 @@ interface Colors {
   faceAlt: Rgb
   ghost: [Rgb, Rgb]
   fail: string
-  // The overlay's dots, and its box and plane.
+  // The overlay's dots; its box, plane and lines; and its points outside or with no answer.
   dot: Rgb
   guide: Rgb
+  quiet: Rgb
+  // A curvature tick where the surface bends inward.
+  concave: Rgb
   focus: string
   annot: string
 }
@@ -162,6 +170,8 @@ function colorsOf(el: Element): Colors {
     fail: v('--scan-fail', '#ff5a33'),
     dot: rgbOf(v('--scan-dot', '#f5a200')),
     guide: rgbOf(v('--scan-guide', '#a2a4a6')),
+    quiet: rgbOf(v('--scan-quiet', '#a2a4a6')),
+    concave: rgbOf(v('--scan-concave', '#b98cff')),
     focus: v('--scan-focus', '#f5a200'),
     annot: v('--scan-annot', '#6a6c6e'),
   }
@@ -173,6 +183,19 @@ function grow(b: { lo: Vec3; hi: Vec3 }, xs: ArrayLike<number>) {
       b.lo[k] = Math.min(b.lo[k]!, xs[i + k]!)
       b.hi[k] = Math.max(b.hi[k]!, xs[i + k]!)
     }
+}
+
+// Every place the overlay marks: its points and the answers drawn at them, the box's corners, a
+// point of the plane, and the drawing's lines.
+export function overlayAt(o: Overlay): Vec3[] {
+  const at: Vec3[] = [...o.points, ...(o.box ?? [])]
+  if (o.plane) at.push(o.plane.origin)
+  for (const l of o.lines) at.push(...l.pts)
+  for (const c of o.closest) at.push(c.at, ...(c.foot ? [c.foot] : []))
+  for (const s of o.sides) at.push(s.at)
+  for (const n of o.normals) at.push(n.at)
+  for (const c of o.curvature) at.push(c.foot)
+  return at
 }
 
 // The frame every view of a scene is fitted to: the shape, its ghosts, and the marks with it.
@@ -197,6 +220,22 @@ export function frameOf(scene: Scene): { lo: Vec3; hi: Vec3 } {
   return b
 }
 
+// A curvature query's two principal curvatures as a reader names them: which way the surface bends
+// along each, and its radius there.
+export function curvatureLabel(k: readonly [number, number]): string {
+  const one = (x: number) =>
+    Math.abs(x) < 1e-9
+      ? 'flat'
+      : `${x > 0 ? 'outward' : 'inward'}, radius ${(1 / Math.abs(x)).toFixed(2)} mm`
+  return `${one(k[0])} · ${one(k[1])}`
+}
+
+// Where `p` is drawn: the place a probe point was spread to, if it is one, else where it is.
+export function drawnAt(moved: readonly [Vec3, Vec3][], p: Vec3): Vec3 {
+  const hit = moved.find(([f]) => Math.hypot(f[0] - p[0], f[1] - p[1], f[2] - p[2]) < 1e-6)
+  return hit ? hit[1] : p
+}
+
 // The marks, the focus reticle and the axes over the GPU's drawing.
 function overlay(
   ctx: CanvasRenderingContext2D,
@@ -204,23 +243,73 @@ function overlay(
   c: Camera,
   col: Colors,
   focus: number,
+  moved: readonly [Vec3, Vec3][],
+  hovered: number,
 ) {
   ctx.clearRect(0, 0, c.w, c.h)
 
   ctx.lineWidth = 1.5
   scene.marks.forEach((m, i) => {
-    const [x, y] = project(c, ...m.p)
+    const [x, y] = project(c, ...drawnAt(moved, m.p))
     ctx.strokeStyle = col.fail
     ctx.fillStyle = col.fail
     if (m.held) ctx.fillRect(x - 3.5, y - 3.5, 7, 7)
     else ctx.strokeRect(x - 3.25, y - 3.25, 6.5, 6.5)
     if (i === focus) reticle(ctx, x, y, col.focus)
   })
+  const hc = scene.overlay?.curvature[hovered]
+  if (hc) {
+    const [x, y] = project(c, ...hc.foot)
+    const text = curvatureLabel(hc.k)
+    ctx.font = '12px ui-monospace, monospace'
+    const tw = ctx.measureText(text).width
+    const [bx, by] = [Math.min(x + 12, c.w - tw - 14), Math.max(y - 26, 4)]
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)'
+    ctx.fillRect(bx - 6, by, tw + 12, 20)
+    ctx.fillStyle = col.focus
+    ctx.fillText(text, bx, by + 14)
+  }
   triad(ctx, c, col.annot)
 }
 
 // How far past the solid's box a plane is drawn, as a share of the box's size each way.
 const PLANE_MARGIN = 0.08
+// A hidden stretch's dash, and the gap after it; a normal's arrow: each as a share of the solid's
+// size, so they read the same on a small part and a large one.
+const DASH = 0.012
+const ARROW = 0.08
+// A point's ball, its radius as a share of the solid's size.
+const BALL = 0.011
+// How far a classify probe's inside and outside points are drawn from its point on the surface, as a
+// share of the solid's size; and how near, in millimetres, they lie in fact.
+const PROBE = 0.035
+const PROBE_NEAR = 0.05
+// Half a curvature tick's length, as a share of the solid's size.
+const TICK = 0.05
+
+// `ends` as dashes along the polyline `pts`, each `dash` long with as long a gap after it.
+function dashed(pts: readonly Vec3[], dash: number, ends: number[]) {
+  let on = true
+  let left = dash
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const [a, b] = [pts[i]!, pts[i + 1]!]
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+    let t = 0
+    while (t < len) {
+      const step = Math.min(left, len - t)
+      if (on) {
+        const at = (s: number) => [0, 1, 2].map(k => a[k]! + ((b[k]! - a[k]!) * s) / len)
+        ends.push(...at(t), ...at(t + step))
+      }
+      t += step
+      left -= step
+      if (left <= 0) {
+        on = !on
+        left = dash
+      }
+    }
+  }
+}
 
 // The case's overlay as the GPU draws it: a plane as the polygon it cuts from the box `within`
 // (the solid's, a little grown), which reaches past the solid on every side as an endless plane
@@ -230,7 +319,27 @@ export function overlayGeometry(
   within: { lo: Vec3; hi: Vec3 },
 ): OverlayGeometry {
   const none = new Float32Array(0)
-  if (!o) return { plane: none, planeEdges: none, box: none, points: none }
+  if (!o) {
+    return {
+      plane: none,
+      planeEdges: none,
+      box: none,
+      points: none,
+      lines: none,
+      hiddenLines: none,
+      sticks: none,
+      seen: none,
+      moved: [],
+      convex: none,
+      concave: none,
+      flat: none,
+      arrows: none,
+      dashes: none,
+      inside: none,
+      quiet: none,
+      ball: 0,
+    }
+  }
   let plane = none
   let planeEdges = none
   if (o.plane) {
@@ -290,7 +399,127 @@ export function overlayGeometry(
       for (const bit of [1, 2, 4]) if (!(i & bit)) ends.push(...at(i), ...at(i | bit))
     box = Float32Array.from(ends)
   }
-  return { plane, planeEdges, box, points: Float32Array.from(o.points.flat()) }
+  const size = Math.hypot(...[0, 1, 2].map(k => within.hi[k]! - within.lo[k]!))
+  // Amber: the points asked about, a point on the boundary. Blue: a nearest point, a point inside.
+  // Grey: a point outside, a point with no normal.
+  const points: number[] = o.points.flat()
+  const inside: number[] = []
+  const quiet: number[] = []
+  const lines: number[] = []
+  const arrows: number[] = []
+  const sticks: number[] = []
+  // A drawing's seen stretches: it names its hidden ones, so these get no dashed copy.
+  const seen: number[] = []
+  const dashes: number[] = []
+  for (const l of o.lines) {
+    if (l.seen) for (let i = 0; i + 1 < l.pts.length; i++) seen.push(...l.pts[i]!, ...l.pts[i + 1]!)
+    else dashed(l.pts, DASH * size, dashes)
+  }
+  for (const c of o.closest) {
+    points.push(...c.at)
+    if (c.foot) {
+      inside.push(...c.foot)
+      lines.push(...c.at, ...c.foot)
+    }
+  }
+  // A classify probe is a point on the surface with points a hair inside and outside it, too close
+  // to tell apart; they are spread along the line through the three, and joined by a stick.
+  const near = (p: Vec3, q: Vec3) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) < PROBE_NEAR
+  const used = new Set<number>()
+  const moved: [Vec3, Vec3][] = []
+  o.sides.forEach((s, i) => {
+    if (s.side !== 'on') return
+    const pick = (side: Side) =>
+      o.sides.findIndex((t, j) => t.side === side && !used.has(j) && near(t.at, s.at))
+    const [ii, oi] = [pick('in'), pick('out')]
+    const [inner, outer] = [o.sides[ii]?.at, o.sides[oi]?.at]
+    const ends =
+      inner && outer ? [inner, outer] : inner ? [inner, s.at] : outer ? [s.at, outer] : null
+    if (!ends) return
+    const d = [0, 1, 2].map(k => ends[1]![k]! - ends[0]![k]!)
+    const len = Math.hypot(...d)
+    if (!len) return
+    const spread = (sign: number) =>
+      [0, 1, 2].map(k => s.at[k]! + (sign * PROBE * size * d[k]!) / len)
+    used.add(i)
+    points.push(...s.at)
+    if (inner) {
+      used.add(ii)
+      inside.push(...spread(-1))
+      moved.push([inner, spread(-1) as Vec3])
+    }
+    if (outer) {
+      used.add(oi)
+      quiet.push(...spread(1))
+      moved.push([outer, spread(1) as Vec3])
+    }
+    sticks.push(...(inner ? spread(-1) : s.at), ...(outer ? spread(1) : s.at))
+  })
+  o.sides.forEach((s, i) => {
+    if (!used.has(i)) (s.side === 'in' ? inside : s.side === 'on' ? points : quiet).push(...s.at)
+  })
+  for (const { at, n } of o.normals) {
+    const len = n ? Math.hypot(...n) : 0
+    if (!n || !len) {
+      quiet.push(...at)
+      continue
+    }
+    arrows.push(...at, ...[0, 1, 2].map(k => at[k]! + (n[k]! / len) * ARROW * size))
+  }
+  // At each foot, a tick along each principal direction, sorted by how the surface bends that way:
+  // outward, inward, or not at all; and a stick to the foot from the point asked about.
+  const convex: number[] = []
+  const concave: number[] = []
+  const flat: number[] = []
+  o.curvature.forEach((c, i) => {
+    const { foot: f, n, d1 } = c
+    const d2: Vec3 = [
+      n[1] * d1[2] - n[2] * d1[1],
+      n[2] * d1[0] - n[0] * d1[2],
+      n[0] * d1[1] - n[1] * d1[0],
+    ]
+    for (const [d, k] of [
+      [d1, c.k[0]],
+      [d2, c.k[1]],
+    ] as const) {
+      const half = d.map(x => x * TICK * size)
+      const into = Math.abs(k) < 1e-9 ? flat : k > 0 ? convex : concave
+      into.push(...[0, 1, 2].map(j => f[j]! - half[j]!), ...[0, 1, 2].map(j => f[j]! + half[j]!))
+    }
+    const q = o.points[i]
+    if (q) sticks.push(...q, ...f)
+  })
+  // Pairs of points again as dashes, for where the solid hides them.
+  const dashesOf = (ends: number[]) => {
+    const out: number[] = []
+    for (let i = 0; i + 5 < ends.length; i += 6) {
+      const pair: Vec3[] = [
+        [ends[i]!, ends[i + 1]!, ends[i + 2]!],
+        [ends[i + 3]!, ends[i + 4]!, ends[i + 5]!],
+      ]
+      dashed(pair, DASH * size, out)
+    }
+    return Float32Array.from(out)
+  }
+  return {
+    plane,
+    planeEdges,
+    box,
+    points: Float32Array.from(points),
+    lines: Float32Array.from(lines),
+    hiddenLines: dashesOf(lines),
+    sticks: Float32Array.from(sticks),
+    seen: Float32Array.from(seen),
+    moved,
+    convex: Float32Array.from(convex),
+    concave: Float32Array.from(concave),
+    flat: Float32Array.from(flat),
+    arrows: Float32Array.from(arrows),
+    dashes: Float32Array.from(dashes),
+    inside: Float32Array.from(inside),
+    quiet: Float32Array.from(quiet),
+    ball: BALL * size,
+  }
 }
 
 // The lock-on reticle: four corner brackets round the focused point.
@@ -359,12 +588,16 @@ export function mountScan(
   let frame = frameOf(scene)
   let view = homeOf(scene.overlay)
   let focused = -1
+  // The curvature query under the pointer, whose values are written beside it.
+  let hovered = -1
   let w = 0
   let h = 0
   let queued = 0
   const colors = colorsOf(canvas)
   renderer.set(scene, scene.alt, scene.ghosts)
-  renderer.setOverlay(overlayGeometry(scene.overlay, frame))
+  let geometry = overlayGeometry(scene.overlay, frame)
+  let moved = geometry.moved
+  renderer.setOverlay(geometry)
 
   const render = () => {
     queued = 0
@@ -398,10 +631,12 @@ export function mountScan(
         ghost: colors.ghost,
         guide: colors.guide,
         dot: colors.dot,
+        quiet: colors.quiet,
+        concave: colors.concave,
       },
     )
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    overlay(ctx, scene, c, colors, focused)
+    overlay(ctx, scene, c, colors, focused, moved, hovered)
   }
   const redraw = () => {
     if (!queued) queued = requestAnimationFrame(render)
@@ -434,7 +669,22 @@ export function mountScan(
     drag = { mode, x: e.clientX, y: e.clientY, moved: false }
   }
   const move = (e: PointerEvent) => {
-    if (!pointers.has(e.pointerId)) return
+    if (!pointers.has(e.pointerId)) {
+      const r = canvas.getBoundingClientRect()
+      const c = camera(view, frame, w, h)
+      let best = -1
+      let bestD = 14
+      scene.overlay?.curvature.forEach((q, i) => {
+        const [x, y] = project(c, ...q.foot)
+        const d = Math.hypot(x - (e.clientX - r.left), y - (e.clientY - r.top))
+        if (d < bestD) [best, bestD] = [i, d]
+      })
+      if (best !== hovered) {
+        hovered = best
+        redraw()
+      }
+      return
+    }
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
     if (pinch && pointers.size === 2) {
       const now = pinchOf()
@@ -463,7 +713,7 @@ export function mountScan(
       let best = -1
       let bestD = 12
       scene.marks.forEach((m, i) => {
-        const [x, y] = project(c, ...m.p)
+        const [x, y] = project(c, ...drawnAt(moved, m.p))
         const d = Math.hypot(x - (e.clientX - r.left), y - (e.clientY - r.top))
         if (d < bestD) [best, bestD] = [i, d]
       })
@@ -532,14 +782,17 @@ export function mountScan(
 
   return {
     set(next) {
-      // A case about another plane opens on its own view; the same plane keeps the reader's.
-      if (JSON.stringify(next.overlay?.plane) !== JSON.stringify(scene.overlay?.plane))
-        view = homeOf(next.overlay)
+      // A case with another home, such as another plane or a drawing seen from elsewhere, opens on
+      // it; one with the same home keeps the reader's view.
+      const home = homeOf(next.overlay)
+      if (JSON.stringify(home) !== JSON.stringify(homeOf(scene.overlay))) view = home
       scene = next
       frame = frameOf(scene)
       focused = -1
       renderer.set(scene, scene.alt, scene.ghosts)
-      renderer.setOverlay(overlayGeometry(scene.overlay, frame))
+      geometry = overlayGeometry(scene.overlay, frame)
+      moved = geometry.moved
+      renderer.setOverlay(geometry)
       redraw()
     },
     focus(i) {

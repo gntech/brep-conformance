@@ -1,11 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { camera, frameOf, HOME, overlayGeometry, panBy, project, tumble, zoomAt } from './scan'
+import { overlayOf } from './glb'
+import type { Vec3 } from './vec'
+import {
+  camera,
+  curvatureLabel,
+  drawnAt,
+  frameOf,
+  HOME,
+  homeOf,
+  overlayAt,
+  overlayGeometry,
+  panBy,
+  project,
+  tumble,
+  zoomAt,
+} from './scan'
 
 describe('overlayGeometry', () => {
   it('draws a box as its twelve edges, each from a corner to the next', () => {
     const g = overlayGeometry(
       {
-        points: [],
+        ...overlayOf({}),
         box: [
           [0, 0, 0],
           [1, 2, 3],
@@ -25,8 +40,8 @@ describe('overlayGeometry', () => {
     const within = { lo: [-2, -2, 0], hi: [2, 2, 10] } as const
     const g = overlayGeometry(
       {
+        ...overlayOf({}),
         points: [[1, 2, 3]],
-        box: null,
         plane: { origin: [0, 0, 5], normal: [0, 0, 2] },
       },
       { lo: [...within.lo], hi: [...within.hi] },
@@ -42,7 +57,7 @@ describe('overlayGeometry', () => {
 
   it('draws no plane that misses the solid’s box', () => {
     const g = overlayGeometry(
-      { points: [], box: null, plane: { origin: [0, 0, 50], normal: [0, 0, 1] } },
+      { ...overlayOf({}), plane: { origin: [0, 0, 50], normal: [0, 0, 1] } },
       { lo: [0, 0, 0], hi: [1, 1, 1] },
     )
     expect(g.plane.length + g.planeEdges.length).toBe(0)
@@ -50,7 +65,276 @@ describe('overlayGeometry', () => {
 
   it('draws nothing where the case lays nothing over its views', () => {
     const g = overlayGeometry(undefined, { lo: [0, 0, 0], hi: [1, 1, 1] })
-    expect(g.plane.length + g.planeEdges.length + g.box.length + g.points.length).toBe(0)
+    const parts = [g.plane, g.planeEdges, g.box, g.points, g.lines, g.dashes, g.inside, g.quiet]
+    expect(parts.reduce((n, p) => n + p.length, 0)).toBe(0)
+  })
+})
+
+// Pairs of points, as LINES draws them.
+const segments = (a: Float32Array) =>
+  Array.from({ length: a.length / 6 }, (_, i) => [
+    [a[6 * i]!, a[6 * i + 1]!, a[6 * i + 2]!],
+    [a[6 * i + 3]!, a[6 * i + 4]!, a[6 * i + 5]!],
+  ])
+
+describe('overlayGeometry, a query’s answers', () => {
+  const within: { lo: Vec3; hi: Vec3 } = { lo: [0, 0, 0], hi: [10, 0, 0] }
+
+  it('draws a drawing’s seen stretches as lines and its hidden ones as dashes along them', () => {
+    const g = overlayGeometry(
+      {
+        ...overlayOf({}),
+        lines: [
+          {
+            seen: true,
+            pts: [
+              [0, 0, 0],
+              [0, 4, 0],
+              [0, 4, 4],
+            ],
+          },
+          {
+            seen: false,
+            pts: [
+              [0, 0, 0],
+              [10, 0, 0],
+            ],
+          },
+        ],
+      },
+      within,
+    )
+    // Its seen stretches are its own part, which is never dashed: the drawing names its hidden ones.
+    expect(g.lines.length + g.hiddenLines.length).toBe(0)
+    expect(segments(g.seen)).toEqual([
+      [
+        [0, 0, 0],
+        [0, 4, 0],
+      ],
+      [
+        [0, 4, 0],
+        [0, 4, 4],
+      ],
+    ])
+    const dashes = segments(g.dashes)
+    expect(dashes.length).toBeGreaterThan(5)
+    // Every dash lies on the hidden stretch, and they leave gaps between them.
+    for (const [p, q] of dashes) for (const v of [p!, q!]) expect([v[1], v[2]]).toEqual([0, 0])
+    const drawn = dashes.reduce((s, [p, q]) => s + q![0]! - p![0]!, 0)
+    expect(drawn).toBeGreaterThan(3)
+    expect(drawn).toBeLessThan(7)
+  })
+
+  it('gives its guide lines again as dashes, for where the solid hides them', () => {
+    const g = overlayGeometry(
+      {
+        ...overlayOf({}),
+        closest: [{ at: [0, 0, 0], foot: [10, 0, 0], distance: 10 }],
+      },
+      within,
+    )
+    const dashes = segments(g.hiddenLines)
+    expect(dashes.length).toBeGreaterThan(5)
+    for (const [p, q] of dashes) for (const v of [p!, q!]) expect([v[1], v[2]]).toEqual([0, 0])
+    const drawn = dashes.reduce((s, [p, q]) => s + q![0]! - p![0]!, 0)
+    expect(drawn).toBeGreaterThan(3)
+    expect(drawn).toBeLessThan(7)
+  })
+
+  it('draws a closest-point query as its point, the nearest point, and the segment between', () => {
+    const g = overlayGeometry(
+      {
+        ...overlayOf({}),
+        closest: [
+          { at: [1, 2, 3], foot: [1, 2, 0], distance: 3 },
+          { at: [5, 5, 5], foot: null, distance: 2 },
+        ],
+      },
+      within,
+    )
+    expect(Array.from(g.points)).toEqual([1, 2, 3, 5, 5, 5])
+    expect(Array.from(g.inside)).toEqual([1, 2, 0])
+    expect(segments(g.lines)).toEqual([
+      [
+        [1, 2, 3],
+        [1, 2, 0],
+      ],
+    ])
+  })
+
+  it('draws each classified point in its side’s colour', () => {
+    const g = overlayGeometry(
+      {
+        ...overlayOf({}),
+        sides: [
+          { at: [1, 0, 0], side: 'in' },
+          { at: [2, 0, 0], side: 'on' },
+          { at: [3, 0, 0], side: 'out' },
+        ],
+      },
+      within,
+    )
+    expect(Array.from(g.inside)).toEqual([1, 0, 0])
+    expect(Array.from(g.points)).toEqual([2, 0, 0])
+    expect(Array.from(g.quiet)).toEqual([3, 0, 0])
+  })
+
+  it('says where each spread probe point is drawn, so a mark on it is drawn there too', () => {
+    const g = overlayOf({
+      sides: [
+        { at: [5, 0, 0], side: 'on' },
+        { at: [5, 0, -0.01], side: 'in' },
+        { at: [5, 0, 0.01], side: 'out' },
+      ],
+    })
+    const o = overlayGeometry(g, within)
+    expect(o.moved.map(([from]) => from)).toEqual([
+      [5, 0, -0.01],
+      [5, 0, 0.01],
+    ])
+    const [, inTo] = o.moved[0]!
+    const [, outTo] = o.moved[1]!
+    expect(inTo[2]).toBeCloseTo(o.inside[2]!)
+    expect(outTo[2]).toBeCloseTo(o.quiet[2]!)
+    expect(drawnAt(o.moved, [5, 0, -0.01])).toEqual(inTo)
+    expect(drawnAt(o.moved, [1, 2, 3])).toEqual([1, 2, 3])
+  })
+
+  it('spreads a probe of three points across the surface, joined by a stick, so they show apart', () => {
+    const g = overlayOf({
+      sides: [
+        { at: [5, 0, 0], side: 'on' },
+        { at: [5, 0, -0.01], side: 'in' },
+        { at: [5, 0, 0.01], side: 'out' },
+        { at: [8, 0, 0], side: 'on' },
+      ],
+    })
+    const o = overlayGeometry(g, within)
+    // On the surface where it is; inside and outside spread along the line through the three.
+    expect(Array.from(o.points)).toEqual([5, 0, 0, 8, 0, 0])
+    const [ix, iy, iz] = Array.from(o.inside)
+    const [ox, oy, oz] = Array.from(o.quiet)
+    expect([ix, iy, ox, oy]).toEqual([5, 0, 5, 0])
+    expect(iz!).toBeLessThan(-0.2)
+    expect(oz!).toBeCloseTo(-iz!)
+    // The stick is part of the mark: faint where hidden like an arrow, never dashed.
+    expect(o.lines.length + o.hiddenLines.length).toBe(0)
+    expect(segments(o.sticks)).toEqual([
+      [
+        [5, 0, iz!],
+        [5, 0, oz!],
+      ],
+    ])
+  })
+
+  it('draws a normal as an arrow from its point, and a point with none apart', () => {
+    const g = overlayGeometry(
+      {
+        ...overlayOf({}),
+        normals: [
+          { at: [1, 1, 1], n: [0, 0, 1] },
+          { at: [4, 4, 4], n: null },
+        ],
+      },
+      within,
+    )
+    // A normal is drawn by its arrow alone, which starts at its point.
+    expect(g.points.length).toBe(0)
+    expect(Array.from(g.quiet)).toEqual([4, 4, 4])
+    expect(g.lines.length).toBe(0)
+    // One segment from the point along its normal; the renderer draws the arrow round it.
+    const [shaft, ...rest] = segments(g.arrows)
+    expect(rest.length).toBe(0)
+    expect(shaft![0]).toEqual([1, 1, 1])
+    expect(shaft![1]![0]).toBeCloseTo(1)
+    expect(shaft![1]![1]).toBeCloseTo(1)
+    expect(shaft![1]![2]).toBeGreaterThan(1.2)
+  })
+})
+
+describe('overlayGeometry, curvature', () => {
+  const within: { lo: Vec3; hi: Vec3 } = { lo: [0, 0, 0], hi: [10, 0, 0] }
+
+  it('draws crossed ticks at each foot along its principal directions, sorted by how it bends', () => {
+    const g = overlayGeometry(
+      overlayOf({
+        points: [[0, 0, 1.2]],
+        curvature: [{ foot: [0, 0, 1], n: [0, 0, 1], d1: [1, 0, 0], k: [1, -0.5] }],
+      }),
+      within,
+    )
+    // k1 > 0 along x bends outward; k2 < 0 along y bends inward.
+    const [convex] = segments(g.convex)
+    const [concave] = segments(g.concave)
+    expect(g.flat.length).toBe(0)
+    expect(convex![0]![1]).toBeCloseTo(0)
+    expect(convex![0]![0]).toBeCloseTo(-convex![1]![0]!)
+    expect(concave![0]![0]).toBeCloseTo(0)
+    expect(concave![0]![1]).toBeCloseTo(-concave![1]![1]!)
+    for (const p of [...convex!, ...concave!]) expect(p[2]).toBeCloseTo(1)
+    // A stick from the point asked about down to its foot.
+    const sticks = segments(g.sticks)
+    expect(sticks.length).toBe(1)
+    const want = [0, 0, 1.2, 0, 0, 1]
+    sticks[0]!.flat().forEach((x, i) => expect(x).toBeCloseTo(want[i]!))
+  })
+
+  it('draws a flat direction apart from a bending one', () => {
+    const g = overlayGeometry(
+      overlayOf({
+        points: [[0, 0, 1]],
+        curvature: [{ foot: [0, 0, 1], n: [0, 0, 1], d1: [1, 0, 0], k: [0.2, 0] }],
+      }),
+      within,
+    )
+    expect(g.convex.length / 6).toBe(1)
+    expect(g.flat.length / 6).toBe(1)
+    expect(g.concave.length).toBe(0)
+  })
+})
+
+describe('curvatureLabel', () => {
+  it('names each principal curvature by how it bends and its radius', () => {
+    expect(curvatureLabel([1 / 3, 0])).toBe('outward, radius 3.00 mm · flat')
+    expect(curvatureLabel([0, -0.5])).toBe('flat · inward, radius 2.00 mm')
+    expect(curvatureLabel([0.25, 0.25])).toBe('outward, radius 4.00 mm · outward, radius 4.00 mm')
+  })
+})
+
+describe('overlayAt', () => {
+  it('gives every place the overlay marks, so the view can take them all in', () => {
+    const at = overlayAt({
+      ...overlayOf({}),
+      points: [[1, 0, 0]],
+      box: [
+        [0, 0, 0],
+        [2, 2, 2],
+      ],
+      plane: { origin: [5, 5, 5], normal: [0, 0, 1] },
+      lines: [
+        {
+          seen: false,
+          pts: [
+            [3, 0, 0],
+            [4, 0, 0],
+          ],
+        },
+      ],
+      closest: [{ at: [6, 0, 0], foot: [7, 0, 0], distance: 1 }],
+      sides: [{ at: [8, 0, 0], side: 'out' }],
+      normals: [{ at: [9, 0, 0], n: null }],
+    })
+    const xs = at.map(p => p[0]).sort((a, b) => a - b)
+    expect(xs).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+  })
+})
+
+describe('homeOf', () => {
+  it('opens a drawing looking along its direction', () => {
+    const look: [number, number, number] = [1, -2, 2]
+    const v = homeOf({ ...overlayOf({}), look })
+    const c = camera(v, { lo: [0, 0, 0], hi: [1, 1, 1] }, 100, 100)
+    for (let k = 0; k < 3; k++) expect(c.toward[k]).toBeCloseTo(look[k]! / 3)
   })
 })
 

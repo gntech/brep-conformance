@@ -42,6 +42,8 @@
   --scan-annot: var(--void-ink-3);
   --scan-dot: var(--accent);
   --scan-guide: var(--series-1);
+  --scan-quiet: var(--void-ink-2);
+  --scan-concave: var(--series-5);
   --scan-face-alt: color-mix(in srgb, var(--series-1) 30%, var(--scan-face));
   --scan-ghost: var(--series-1);
   --scan-ghost2: var(--series-3);
@@ -175,6 +177,57 @@
 }
 .bc-key--missed {
   border: 1.5px solid var(--error-void);
+}
+.bc-key--dot,
+.bc-key--inside,
+.bc-key--quiet {
+  border-radius: 50%;
+}
+.bc-key--dot {
+  background: var(--accent);
+}
+.bc-key--inside {
+  background: var(--series-1);
+}
+.bc-key--quiet {
+  background: var(--void-ink-2);
+}
+.bc-key--seen,
+.bc-key--hidden {
+  width: 14px;
+  height: 0;
+  border-top: 1.5px solid var(--series-1);
+}
+.bc-key--hidden {
+  border-top-style: dashed;
+}
+.bc-key--convex,
+.bc-key--concave,
+.bc-key--flat {
+  width: 12px;
+  height: 0;
+  border-top: 3px solid var(--series-1);
+}
+.bc-key--concave {
+  border-top-color: var(--series-5);
+}
+.bc-key--flat {
+  border-top-color: var(--void-ink-2);
+}
+.bc-key--arrow {
+  position: relative;
+  width: 12px;
+  height: 0;
+  margin-right: 4px;
+  border-top: 2px solid var(--series-1);
+}
+.bc-key--arrow::after {
+  content: '';
+  position: absolute;
+  right: -5px;
+  top: -5px;
+  border: 4px solid transparent;
+  border-left: 6px solid var(--series-1);
 }
 .bc-views {
   display: flex;
