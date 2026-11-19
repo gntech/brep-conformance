@@ -16,7 +16,7 @@ export function sourcesOf(name: string): string[] {
   if (name.includes('∩')) return ['a', 'b']
   const cut = /^\s*(\S+)\s*∖\s*(\S+)\s*$/.exec(name)
   if (cut) return [cut[2]!]
-  return { after: ['before'], moved: ['solid'], limits: ['input'], cut: ['solid'] }[name] ?? []
+  return { after: ['before'], moved: ['solid'], result: ['input'], cut: ['solid'] }[name] ?? []
 }
 
 export function merge(shapes: Shape[]): Shape {
@@ -96,6 +96,17 @@ export function firstView(views: GlbView[]): number {
 
 export type Mark =
   'dot' | 'inside' | 'quiet' | 'seen' | 'hidden' | 'arrow' | 'convex' | 'concave' | 'flat'
+
+// The overlay as drawn: the points and the answers drawn at them, and the box, each left out when
+// switched off.
+export function shownOverlay(o: Overlay, show: { points: boolean; box: boolean }): Overlay {
+  if (show.points && show.box) return o
+  return {
+    ...o,
+    ...(show.points ? {} : { points: [], closest: [], sides: [], normals: [] }),
+    ...(show.box ? {} : { box: null }),
+  }
+}
 
 // The key to the marks the overlay is drawn with, each once: a drawing's lines always, the
 // answers of a point query only while its points are shown.
