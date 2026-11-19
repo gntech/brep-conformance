@@ -1,5 +1,6 @@
+import { DENSITIES, type Density } from './zebra'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Checkbox, Segmented } from '@/ds'
+import { Checkbox, Menu, Segmented } from '@/ds'
 import { Annot } from '@/components'
 import { zoomKeyOf } from './format'
 import type { Mark, ScanHandle } from './scan'
@@ -65,6 +66,7 @@ export function ScanView({
   // The view shown, by name, so moving to another case or kernel keeps it where it can.
   const [viewName, setViewName] = useState<string | null>(null)
   const [operands, setOperands] = useState(true)
+  const [zebra, setZebra] = useState<Density | null>(null)
   const [points, setPoints] = useState(true)
   const [box, setBox] = useState(true)
   const o = loaded?.overlay
@@ -167,6 +169,7 @@ export function ScanView({
         marks,
         overlay: overlay ?? undefined,
         frame,
+        zebra: zebra ? DENSITIES[zebra] : 0,
       }
       if (handle.current) return handle.current.set(scene)
       try {
@@ -178,7 +181,7 @@ export function ScanView({
     return () => {
       live = false
     }
-  }, [loaded, tones, ghosts, marks, overlay, noGpu])
+  }, [loaded, tones, ghosts, marks, overlay, noGpu, zebra])
 
   useEffect(() => handle.current?.focus(focus), [focus, loaded, marks])
 
@@ -274,6 +277,29 @@ export function ScanView({
           {shownRow.hasBox && (
             <Checkbox tone="void" checked={box} onChange={setBox} label="show box" />
           )}
+          <span className="bc-views__zebra">
+            <Menu
+              label="zebra stripes"
+              trigger={
+                <span
+                  className={
+                    zebra ? 'bc-views__zebra-now bc-views__zebra-now--on' : 'bc-views__zebra-now'
+                  }
+                >
+                  zebra
+                </span>
+              }
+              align="right"
+              width={96}
+              tone="void"
+              items={['off', ...Object.keys(DENSITIES)].map(id => ({
+                id,
+                label: id,
+                intent: (zebra ?? 'off') === id ? ('armed' as const) : undefined,
+              }))}
+              onSelect={id => setZebra(id === 'off' ? null : (id as Density))}
+            />
+          </span>
         </div>
       )}
       <p className="bc-shape__note" title={view?.note}>
