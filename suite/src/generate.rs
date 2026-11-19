@@ -5,6 +5,7 @@
 use std::f64::consts::{PI, TAU};
 
 use crate::model::{Frame, Op, PathSeg, Primitive, Rigid, Shape, Side, Spline, Vec3};
+use crate::portable::Portable;
 use crate::profile::{Profile, Seg, chamfered, circle, rounded};
 
 mod blends;
@@ -215,7 +216,7 @@ impl Curve3 {
         match *self {
             Curve3::Line { a, b } => [0, 1, 2].map(|k| a[k] + t * (b[k] - a[k])),
             Curve3::Circle { c, x, y, r } => {
-                let (s, co) = (TAU * t).sin_cos();
+                let (s, co) = (TAU * t).psin_cos();
                 [0, 1, 2].map(|k| c[k] + r * (co * x[k] + s * y[k]))
             }
         }
@@ -371,7 +372,7 @@ impl Limits {
                 let reach = from.max(*to);
                 let at = |z: f64| from + (to - from) * (z / block[2]).clamp(0.0, 1.0);
                 let (a, b) = (at(p[2] - reach), at(p[2] + reach));
-                let taken = |r: f64| u < r && v < r && (r - u).powi(2) + (r - v).powi(2) > r * r;
+                let taken = |r: f64| u < r && v < r && (r - u).ppowi(2) + (r - v).ppowi(2) > r * r;
                 if taken(a.min(b)) {
                     Some(false)
                 } else if !taken(a.max(b)) {
@@ -1075,8 +1076,47 @@ impl Rng {
         let z = self.range(-1.0, 1.0);
         let t = self.range(0.0, 2.0 * PI);
         let s = (1.0 - z * z).sqrt();
-        [s * t.cos(), s * t.sin(), z]
+        [s * t.pcos(), s * t.psin(), z]
     }
+}
+
+/// `debug` with every float rounded to nine significant digits. The values a case holds come out of
+/// `sin`, `cos` and the like, whose last bit differs between platforms' maths libraries; rounded,
+/// they hash the same everywhere, and what cancellation leaves of a zero hashes as zero. A number
+/// with no point and no exponent is an integer, and is kept.
+fn rounded_floats(debug: &str) -> String {
+    let b = debug.as_bytes();
+    let mut out = String::with_capacity(debug.len());
+    let mut i = 0;
+    while i < b.len() {
+        let starts =
+            b[i].is_ascii_digit() || (b[i] == b'-' && b.get(i + 1).is_some_and(u8::is_ascii_digit));
+        let after_word = i > 0 && (b[i - 1].is_ascii_alphanumeric() || b[i - 1] == b'_');
+        if !starts || after_word {
+            out.push(b[i] as char);
+            i += 1;
+            continue;
+        }
+        let mut j = i + 1;
+        while j < b.len()
+            && (b[j].is_ascii_digit()
+                || b[j] == b'.'
+                || b[j] == b'e'
+                || (b[j] == b'-' && b[j - 1] == b'e'))
+        {
+            j += 1;
+        }
+        let token = &debug[i..j];
+        match token.parse::<f64>() {
+            // Below a picometre a value is what cancellation left of a zero, whose bits and sign
+            // differ between platforms.
+            Ok(v) if token.contains(['.', 'e']) && v.abs() < 1e-12 => out.push_str("0e0"),
+            Ok(v) if token.contains(['.', 'e']) => out.push_str(&format!("{v:.8e}")),
+            _ => out.push_str(token),
+        }
+        i = j;
+    }
+    out
 }
 
 /// FNV-1a, for ids that are the same on every platform and Rust release.
@@ -2003,10 +2043,10 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 exact.chain.as_ref().map(|x| format!("{x:?}")),
             ];
             for h in held.into_iter().flatten() {
-                key = format!("{key}|{:016x}", fnv(&h));
+                key = format!("{key}|{:016x}", fnv(&rounded_floats(&h)));
             }
             out.push(Case {
-                id: format!("{}-{:016x}", f.name, fnv(&key)),
+                id: format!("{}-{:016x}", f.name, fnv(&rounded_floats(&key))),
                 family: f.name,
                 test: "",
                 a,
@@ -2030,7 +2070,7 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 key = format!("{key}|{how:?}");
             }
             out.push(Case {
-                id: format!("{}-{:016x}", f.name, fnv(&key)),
+                id: format!("{}-{:016x}", f.name, fnv(&rounded_floats(&key))),
                 family: f.name,
                 test: "",
                 a,
@@ -2058,7 +2098,7 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 .collect();
             let key = format!("{name}@1|{}|{}", a.key(), nums.join(","));
             out.push(Case {
-                id: format!("{name}-{:016x}", fnv(&key)),
+                id: format!("{name}-{:016x}", fnv(&rounded_floats(&key))),
                 family: name,
                 test: "",
                 a: a.into(),
@@ -2086,7 +2126,7 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 .collect();
             let key = format!("{name}@1|{}|{}", a.key(), nums.join(","));
             out.push(Case {
-                id: format!("{name}-{:016x}", fnv(&key)),
+                id: format!("{name}-{:016x}", fnv(&rounded_floats(&key))),
                 family: name,
                 test: "",
                 a: a.into(),
@@ -2111,10 +2151,10 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 exact.loft.as_ref().map(|x| format!("{x:?}")),
             ];
             for h in held.into_iter().flatten() {
-                key = format!("{key}|{:016x}", fnv(&h));
+                key = format!("{key}|{:016x}", fnv(&rounded_floats(&h)));
             }
             out.push(Case {
-                id: format!("{}-{:016x}", f.name, fnv(&key)),
+                id: format!("{}-{:016x}", f.name, fnv(&rounded_floats(&key))),
                 family: f.name,
                 test: "",
                 a,
@@ -2147,7 +2187,7 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 .collect();
             let key = format!("{}@{}|{}|{}", f.name, f.version, base.key(), nums.join(","));
             out.push(Case {
-                id: format!("{}-{:016x}", f.name, fnv(&key)),
+                id: format!("{}-{:016x}", f.name, fnv(&rounded_floats(&key))),
                 family: f.name,
                 test: "",
                 a: base.into(),
@@ -2202,7 +2242,7 @@ fn box_box(r: &mut Rng) -> (Primitive, Primitive, Exact) {
     };
     // Apart along each axis by the gap between their ranges, or not at all.
     let gap: f64 = (0..3)
-        .map(|k| (la[k] - hb[k]).max(lb[k] - ha[k]).max(0.0).powi(2))
+        .map(|k| (la[k] - hb[k]).max(lb[k] - ha[k]).max(0.0).ppowi(2))
         .sum::<f64>()
         .sqrt();
     let exact = Exact {
@@ -2266,7 +2306,7 @@ fn steinmetz(r: &mut Rng) -> (Primitive, Primitive, Exact) {
         height: h,
     };
     let exact = Exact {
-        intersection_volume: Some(16.0 * rad.powi(3) / 3.0),
+        intersection_volume: Some(16.0 * rad.ppowi(3) / 3.0),
         intersection_area: Some(16.0 * rad * rad),
         distance: None,
         ..Default::default()
@@ -2314,7 +2354,7 @@ fn sphere_sphere(r: &mut Rng) -> (Primitive, Primitive, Exact) {
         radius: r2,
     };
     let v = PI
-        * (r1 + r2 - d).powi(2)
+        * (r1 + r2 - d).ppowi(2)
         * (d * d + 2.0 * d * r2 - 3.0 * r2 * r2 + 2.0 * d * r1 + 6.0 * r1 * r2 - 3.0 * r1 * r1)
         / (12.0 * d);
     let h1 = (r2 - r1 + d) * (r2 + r1 - d) / (2.0 * d);
@@ -2373,14 +2413,14 @@ fn torus_halfspace(r: &mut Rng) -> (Primitive, Primitive, Exact) {
 /// A depth of contact `r·10⁻ᵏ` for k from 1 to 6: from a clear overlap to a sliver a millionth of
 /// the size, still well above a tolerance of 1e-7 mm.
 fn depth(r: &mut Rng, size: f64) -> f64 {
-    size * 10f64.powi(-(1 + (r.next_u64() % 6) as i32))
+    size * 10f64.ppowi(-(1 + (r.next_u64() % 6) as i32))
 }
 
 /// The lens two spheres of radii `r1`, `r2` with centres `d` apart share: its volume and the area
 /// of its two caps.
 fn sphere_lens(r1: f64, r2: f64, d: f64) -> (f64, f64) {
     let v = PI
-        * (r1 + r2 - d).powi(2)
+        * (r1 + r2 - d).ppowi(2)
         * (d * d + 2.0 * d * r2 - 3.0 * r2 * r2 + 2.0 * d * r1 + 6.0 * r1 * r2 - 3.0 * r1 * r1)
         / (12.0 * d);
     let h1 = (r2 - r1 + d) * (r2 + r1 - d) / (2.0 * d);
@@ -2393,11 +2433,11 @@ fn sphere_lens(r1: f64, r2: f64, d: f64) -> (f64, f64) {
 fn circle_lens(r1: f64, r2: f64, d: f64) -> (f64, f64) {
     let a1 = ((d * d + r1 * r1 - r2 * r2) / (2.0 * d * r1))
         .clamp(-1.0, 1.0)
-        .acos();
+        .pacos();
     let a2 = ((d * d + r2 * r2 - r1 * r1) / (2.0 * d * r2))
         .clamp(-1.0, 1.0)
-        .acos();
-    let area = r1 * r1 * (a1 - a1.sin() * a1.cos()) + r2 * r2 * (a2 - a2.sin() * a2.cos());
+        .pacos();
+    let area = r1 * r1 * (a1 - a1.psin() * a1.pcos()) + r2 * r2 * (a2 - a2.psin() * a2.pcos());
     (area, 2.0 * r1 * a1 + 2.0 * r2 * a2)
 }
 
@@ -2560,7 +2600,7 @@ fn spheres_touching(r: &mut Rng) -> (Primitive, Primitive, Exact) {
     let exact = if inside {
         // The smaller lies inside the larger, touching it from within at one point.
         Exact {
-            intersection_volume: Some(4.0 / 3.0 * PI * small.powi(3)),
+            intersection_volume: Some(4.0 / 3.0 * PI * small.ppowi(3)),
             intersection_area: Some(4.0 * PI * small * small),
             distance: None,
             ..Default::default()
@@ -2584,7 +2624,7 @@ fn blob(rng: &mut Rng, r: f64) -> Spline {
         .map(|i| {
             let t = 2.0 * PI * i as f64 / n as f64;
             let rr = r * rng.range(0.75, 1.25);
-            [rr * t.cos(), rr * t.sin()]
+            [rr * t.pcos(), rr * t.psin()]
         })
         .collect();
     ctrl.extend_from_within(..3);
@@ -2596,7 +2636,7 @@ fn blob(rng: &mut Rng, r: f64) -> Spline {
 }
 
 fn turned(s: &Spline, angle: f64, shift: [f64; 2]) -> Spline {
-    let (c, si) = (angle.cos(), angle.sin());
+    let (c, si) = (angle.pcos(), angle.psin());
     Spline {
         ctrl: s
             .ctrl
@@ -2643,7 +2683,7 @@ fn spline_prisms(r: &mut Rng) -> (Primitive, Primitive, Exact) {
             let t = r.range(0.0, 2.0 * PI);
             spline_prism(
                 Frame::at([0.0, 0.0, r.range(-2.0, 2.0)]),
-                turned(&outline, 0.0, [dep * t.cos(), dep * t.sin()]),
+                turned(&outline, 0.0, [dep * t.pcos(), dep * t.psin()]),
                 h,
             )
         }
@@ -2729,7 +2769,7 @@ fn separated(r: &mut Rng) -> (Primitive, Primitive, Exact) {
         }
         4 => {
             let h = r.range(3.0, 10.0);
-            let alpha = (size / h).atan();
+            let alpha = (size / h).patan();
             let d = tilted(r, 1.0, alpha);
             let w = 2.0 * (h + size);
             let below = axis_box([-w, -w, -w], [w, w, 0.0]);
@@ -2767,8 +2807,8 @@ fn corners(pts: &[[f64; 2]]) -> Vec<(f64, f64)> {
         .map(|i| {
             let (p, q, o) = (pts[(i + n - 1) % n], pts[i], pts[(i + 1) % n]);
             let (u, v) = ([q[0] - p[0], q[1] - p[1]], [o[0] - q[0], o[1] - q[1]]);
-            let turn = (u[0] * v[1] - u[1] * v[0]).atan2(u[0] * v[0] + u[1] * v[1]);
-            (turn, u[0].hypot(u[1]).min(v[0].hypot(v[1])))
+            let turn = (u[0] * v[1] - u[1] * v[0]).patan2(u[0] * v[0] + u[1] * v[1]);
+            (turn, u[0].phypot(u[1]).min(v[0].phypot(v[1])))
         })
         .collect()
 }
@@ -2782,7 +2822,7 @@ fn blend_size(r: &mut Rng, blend: Act, pts: &[[f64; 2]], chosen: &[usize]) -> f6
         .map(|&i| {
             let (turn, side) = c[i];
             let reach = match blend {
-                Act::Fillet => (turn.abs() / 2.0).tan(),
+                Act::Fillet => (turn.abs() / 2.0).ptan(),
                 _ => 1.0,
             };
             0.45 * side / reach
@@ -2819,7 +2859,7 @@ fn blended_prism(r: &mut Rng, blend: Act) -> (Primitive, Feature, Primitive) {
             (0..n)
                 .map(|i| {
                     let t = turn + TAU * i as f64 / n as f64;
-                    [rad * t.cos(), rad * t.sin()]
+                    [rad * t.pcos(), rad * t.psin()]
                 })
                 .collect()
         }
@@ -2901,7 +2941,7 @@ fn blended_rim(r: &mut Rng, blend: Act) -> (Primitive, Feature, Primitive) {
         .iter()
         .map(|&i| {
             let phi = r.range(0.0, TAU);
-            [pts[i][0] * phi.cos(), pts[i][0] * phi.sin(), pts[i][1]]
+            [pts[i][0] * phi.pcos(), pts[i][0] * phi.psin(), pts[i][1]]
         })
         .collect();
     let want = Primitive::Revolve {
@@ -3044,9 +3084,9 @@ fn tilted(r: &mut Rng, sign: f64, alpha: f64) -> Vec3 {
     let theta = r.range(0.0, 0.8) * (PI / 2.0 - alpha);
     let phi = r.range(0.0, 2.0 * PI);
     [
-        theta.sin() * phi.cos(),
-        theta.sin() * phi.sin(),
-        sign * theta.cos(),
+        theta.psin() * phi.pcos(),
+        theta.psin() * phi.psin(),
+        sign * theta.pcos(),
     ]
 }
 
@@ -3056,7 +3096,7 @@ fn tilted(r: &mut Rng, sign: f64, alpha: f64) -> Vec3 {
 fn cones_touching(r: &mut Rng) -> (Primitive, Primitive, Exact) {
     let h = r.range(3.0, 10.0);
     let rad = r.range(1.0, 6.0);
-    let alpha = (rad / h).atan();
+    let alpha = (rad / h).patan();
     let w = 2.0 * (h + rad);
     let below = axis_box([-w, -w, -w], [w, w, 0.0]);
     let apex_cone = |d: Vec3| cone(Frame::along([0.0; 3], d), 0.0, rad, h);
@@ -3064,7 +3104,7 @@ fn cones_touching(r: &mut Rng) -> (Primitive, Primitive, Exact) {
         0 => (apex_cone(tilted(r, 1.0, alpha)), below),
         1 => {
             let (h2, r2) = (r.range(3.0, 10.0), r.range(1.0, 6.0));
-            let d = tilted(r, -1.0, (r2 / h2).atan());
+            let d = tilted(r, -1.0, (r2 / h2).patan());
             (
                 apex_cone(tilted(r, 1.0, alpha)),
                 cone(Frame::along([0.0; 3], d), 0.0, r2, h2),
@@ -3079,7 +3119,7 @@ fn cones_touching(r: &mut Rng) -> (Primitive, Primitive, Exact) {
         }
         _ => {
             // The side's lowest line runs along +x on the plane z = 0.
-            let d = [alpha.cos(), 0.0, alpha.sin()];
+            let d = [alpha.pcos(), 0.0, alpha.psin()];
             (apex_cone(d), below)
         }
     };
@@ -3099,7 +3139,7 @@ fn cones_touching(r: &mut Rng) -> (Primitive, Primitive, Exact) {
 fn inscribed(r: &mut Rng) -> (Primitive, Primitive, Exact) {
     let rho = r.range(1.0, 6.0);
     let ball = |rho: f64| Exact {
-        intersection_volume: Some(4.0 / 3.0 * PI * rho.powi(3)),
+        intersection_volume: Some(4.0 / 3.0 * PI * rho.ppowi(3)),
         intersection_area: Some(4.0 * PI * rho * rho),
         distance: None,
         ..Default::default()
@@ -3124,19 +3164,19 @@ fn inscribed(r: &mut Rng) -> (Primitive, Primitive, Exact) {
             let alpha = r.range(0.2, 1.0);
             let h = r.range(6.0, 16.0);
             let c = h * r.range(0.3, 0.8);
-            let rho = c * alpha.sin();
-            let k = cone(Frame::at([0.0; 3]), 0.0, h * alpha.tan(), h);
+            let rho = c * alpha.psin();
+            let k = cone(Frame::at([0.0; 3]), 0.0, h * alpha.ptan(), h);
             let exact = if c + rho <= h {
                 ball(rho)
             } else {
                 let cap = c + rho - h;
                 Exact {
                     intersection_volume: Some(
-                        4.0 / 3.0 * PI * rho.powi(3) - PI * cap * cap * (3.0 * rho - cap) / 3.0,
+                        4.0 / 3.0 * PI * rho.ppowi(3) - PI * cap * cap * (3.0 * rho - cap) / 3.0,
                     ),
                     intersection_area: Some(
                         4.0 * PI * rho * rho - 2.0 * PI * rho * cap
-                            + PI * (rho * rho - (h - c).powi(2)),
+                            + PI * (rho * rho - (h - c).ppowi(2)),
                     ),
                     distance: None,
                     ..Default::default()
@@ -3170,7 +3210,7 @@ fn inscribed(r: &mut Rng) -> (Primitive, Primitive, Exact) {
 
 /// `v` turned by `angle` about the unit axis `k` (Rodrigues).
 fn turn(v: Vec3, k: Vec3, angle: f64) -> Vec3 {
-    let (s, co) = (angle.sin(), angle.cos());
+    let (s, co) = (angle.psin(), angle.pcos());
     let kv = k[0] * v[0] + k[1] * v[1] + k[2] * v[2];
     let x = [
         k[1] * v[2] - k[2] * v[1],
@@ -3214,7 +3254,7 @@ fn near_coincident_boxes(r: &mut Rng) -> (Primitive, Primitive, Exact) {
         };
         (a, axis_box(lo, hi), exact)
     } else {
-        let angle = 10f64.powi(-(4 + (r.next_u64() % 7) as i32));
+        let angle = 10f64.ppowi(-(4 + (r.next_u64() % 7) as i32));
         let k = r.direction();
         let c = scale3(s, 0.5);
         let o = turn(scale3(c, -1.0), k, angle);
@@ -3365,7 +3405,7 @@ fn star(c: [f64; 2], n: usize, r_in: f64, r_out: f64, turn: f64) -> Vec<[f64; 2]
         .map(|i| {
             let t = turn + PI * i as f64 / n as f64;
             let r = if i % 2 == 0 { r_out } else { r_in };
-            [c[0] + r * t.cos(), c[1] + r * t.sin()]
+            [c[0] + r * t.pcos(), c[1] + r * t.psin()]
         })
         .collect()
 }
@@ -3664,7 +3704,7 @@ fn lofts(r: &mut Rng) -> (Primitive, Primitive, Exact) {
 /// A case of another family with every length times 10ᵏ, k from −3 to 4: from parts a few microns
 /// across to ones of tens of metres, against one absolute tolerance. Closed forms scale with it.
 fn scaled(r: &mut Rng) -> (Primitive, Primitive, Exact) {
-    let s = 10f64.powi(-3 + (r.next_u64() % 8) as i32);
+    let s = 10f64.ppowi(-3 + (r.next_u64() % 8) as i32);
     let ((a, b, e), variant) = match r.next_u64() % 5 {
         0 => (sphere_sphere(r), "booleans/scale/microns-to-metres-spheres"),
         1 => (
@@ -3682,7 +3722,7 @@ fn scaled(r: &mut Rng) -> (Primitive, Primitive, Exact) {
         ),
     };
     let exact = Exact {
-        intersection_volume: e.intersection_volume.map(|v| v * s.powi(3)),
+        intersection_volume: e.intersection_volume.map(|v| v * s.ppowi(3)),
         intersection_area: e.intersection_area.map(|v| v * s * s),
         distance: None,
         variant: Some(variant),
@@ -3961,8 +4001,8 @@ fn line_contact(r: &mut Rng) -> (Primitive, Primitive, Exact) {
             let turn = r.range(0.0, TAU);
             let (h1, h2) = (r.range(4.0, 10.0), r.range(4.0, 10.0));
             let c = [
-                (r1 + r2) * turn.cos(),
-                (r1 + r2) * turn.sin(),
+                (r1 + r2) * turn.pcos(),
+                (r1 + r2) * turn.psin(),
                 r.range(-2.0, 2.0),
             ];
             let a = Primitive::Cylinder {
@@ -3990,7 +4030,7 @@ fn line_contact(r: &mut Rng) -> (Primitive, Primitive, Exact) {
                 height: h1,
             };
             let b = Primitive::Cylinder {
-                frame: Frame::at([off * turn.cos(), off * turn.sin(), lift]),
+                frame: Frame::at([off * turn.pcos(), off * turn.psin(), lift]),
                 radius: r2,
                 height: h2,
             };
@@ -4006,12 +4046,12 @@ fn line_contact(r: &mut Rng) -> (Primitive, Primitive, Exact) {
             // Tipped up by its half-angle α, the cone's lowest line is level, b·cos α below the
             // centre of its base.
             let (b, h) = (r.range(1.0, 3.0), r.range(4.0, 8.0));
-            let alpha = (b / h).atan();
-            let d = [alpha.cos(), 0.0, -alpha.sin()];
+            let alpha = (b / h).patan();
+            let d = [alpha.pcos(), 0.0, -alpha.psin()];
             let o = [
-                w[0] * 0.5 - h * alpha.cos() * 0.5,
+                w[0] * 0.5 - h * alpha.pcos() * 0.5,
                 w[1] * r.range(0.3, 0.7),
-                w[2] + b * alpha.cos(),
+                w[2] + b * alpha.pcos(),
             ];
             let cone = Primitive::Cone {
                 frame: Frame::along(o, d),
@@ -4059,7 +4099,7 @@ fn flush_pocket(r: &mut Rng) -> (Primitive, Primitive, Exact) {
 /// of it, a needle right through it, or a coin across its top face.
 fn thin_solid(r: &mut Rng) -> (Primitive, Primitive, Exact) {
     let w = [r.range(6.0, 12.0), r.range(6.0, 12.0), r.range(6.0, 12.0)];
-    let t = 10f64.powf(r.range(-3.0, -2.0));
+    let t = 10f64.ppowf(r.range(-3.0, -2.0));
     let block = axis_box([0.0; 3], w);
     let (thin, inside) = match r.next_u64() % 3 {
         0 => {
@@ -4117,7 +4157,7 @@ fn island(r: &mut Rng) -> Drawn {
     let room = cavity - rad;
     let e = room * r.range(0.0, 0.8);
     let turn = r.range(0.0, TAU);
-    let at = [c[0] + e * turn.cos(), c[1] + e * turn.sin(), c[2]];
+    let at = [c[0] + e * turn.pcos(), c[1] + e * turn.psin(), c[2]];
     let shell = Shape::bool(
         Op::Difference,
         axis_box([0.0; 3], [w; 3]),
@@ -4271,7 +4311,7 @@ fn path_sweeps(r: &mut Rng) -> (Primitive, Primitive, Exact) {
             let [_, d1, d2] = path.eval(i as f64 / 2000.0);
             let c = cross3(d1, d2);
             let speed = (d1[0] * d1[0] + d1[1] * d1[1] + d1[2] * d1[2]).sqrt();
-            speed.powi(3) / (c[0] * c[0] + c[1] * c[1] + c[2] * c[2]).sqrt().max(1e-300)
+            speed.ppowi(3) / (c[0] * c[0] + c[1] * c[1] + c[2] * c[2]).sqrt().max(1e-300)
         })
         .fold(f64::INFINITY, f64::min);
     let reach = (rho_min / 3.0).min(1.5);
@@ -4336,7 +4376,7 @@ fn step_tessellated(r: &mut Rng) -> (Primitive, Primitive, Exact) {
     let pts: Vec<[f64; 2]> = (0..n)
         .map(|i| {
             let t = TAU * i as f64 / n as f64;
-            [rad * t.cos(), rad * t.sin()]
+            [rad * t.pcos(), rad * t.psin()]
         })
         .collect();
     let origin = [
@@ -4400,7 +4440,7 @@ fn step_prism(r: &mut Rng) -> (Primitive, Primitive, Exact) {
             (0..n)
                 .map(|i| {
                     let t = TAU * i as f64 / n as f64;
-                    [rad * t.cos(), rad * t.sin()]
+                    [rad * t.pcos(), rad * t.psin()]
                 })
                 .collect()
         }
@@ -4540,7 +4580,7 @@ fn rounded_block(lo: Vec3, hi: Vec3, r: f64) -> (Shape, f64, f64) {
     let volume = d[0] * d[1] * d[2]
         + 2.0 * r * (pq + qs + sp)
         + PI * r * r * sum
-        + 4.0 / 3.0 * PI * r.powi(3);
+        + 4.0 / 3.0 * PI * r.ppowi(3);
     let area = 2.0 * (pq + qs + sp) + 2.0 * PI * r * sum + 4.0 * PI * r * r;
     (s, volume, area)
 }
@@ -4591,7 +4631,7 @@ fn convex_polygon(r: &mut Rng) -> Vec<[f64; 2]> {
     (0..n)
         .map(|i| {
             let t = turn + TAU * (i as f64 + r.range(-0.15, 0.15)) / n as f64;
-            [rad * t.cos(), rad * t.sin()]
+            [rad * t.pcos(), rad * t.psin()]
         })
         .collect()
 }
@@ -4601,7 +4641,7 @@ fn inset(pts: &[[f64; 2]], d: f64) -> Vec<[f64; 2]> {
     let n = pts.len();
     let normal = |i: usize| {
         let (p, q) = (pts[i], pts[(i + 1) % n]);
-        let len = (q[0] - p[0]).hypot(q[1] - p[1]);
+        let len = (q[0] - p[0]).phypot(q[1] - p[1]);
         [-(q[1] - p[1]) / len, (q[0] - p[0]) / len]
     };
     (0..n)
@@ -4618,7 +4658,7 @@ fn inset(pts: &[[f64; 2]], d: f64) -> Vec<[f64; 2]> {
 fn round_limit(pts: &[[f64; 2]]) -> f64 {
     corners(pts)
         .iter()
-        .map(|&(turn, side)| 0.45 * side / (turn.abs() / 2.0).tan())
+        .map(|&(turn, side)| 0.45 * side / (turn.abs() / 2.0).ptan())
         .fold(f64::INFINITY, f64::min)
 }
 
@@ -4688,7 +4728,7 @@ fn fillet_chain(r: &mut Rng) -> FeatureDraw {
     );
     for seg in &inner_loop {
         let tube = match *seg {
-            Seg::Line { a, b } if (b[0] - a[0]).hypot(b[1] - a[1]) > 1e-9 => {
+            Seg::Line { a, b } if (b[0] - a[0]).phypot(b[1] - a[1]) > 1e-9 => {
                 rod([a[0], a[1], z], [b[0], b[1], z], rad)
             }
             Seg::Arc { center, radius, .. } => Primitive::Torus {
@@ -4704,7 +4744,7 @@ fn fillet_chain(r: &mut Rng) -> FeatureDraw {
     let (ai, li) = (inner.area(), inner.perimeter());
     let exact = Exact {
         result_volume: Some(
-            a * z + ai * rad + PI * rad * rad / 4.0 * li + 2.0 * PI / 3.0 * rad.powi(3),
+            a * z + ai * rad + PI * rad * rad / 4.0 * li + 2.0 * PI / 3.0 * rad.ppowi(3),
         ),
         result_area: Some(a + l * z + ai + PI / 2.0 * rad * li + 2.0 * PI * rad * rad),
         ..Default::default()
@@ -4771,7 +4811,7 @@ fn rounded_prism(r: &mut Rng) -> FeatureDraw {
     let m = PI * big_h + PI * l / 2.0;
     let s = 2.0 * a + l * big_h;
     let exact = Exact {
-        result_volume: Some(a * big_h + s * rad + m * rad * rad + 4.0 / 3.0 * PI * rad.powi(3)),
+        result_volume: Some(a * big_h + s * rad + m * rad * rad + 4.0 / 3.0 * PI * rad.ppowi(3)),
         result_area: Some(s + 2.0 * m * rad + 4.0 * PI * rad * rad),
         ..Default::default()
     };
@@ -4845,11 +4885,11 @@ fn opened_l_prism(r: &mut Rng) -> FeatureDraw {
         )
     };
     let corners = Shape::bool(Op::Union, corner(h - rad, h - rad), corner(rad, 0.0));
-    let swing = 2.0 * k * (5.0 / 3.0 - PI / 2.0) * rad.powi(3);
+    let swing = 2.0 * k * (5.0 / 3.0 - PI / 2.0) * rad.ppowi(3);
     let swing_area = 2.0 * ((2.0 - PI / 2.0) * (PI / 2.0 - 1.0) - k) * rad * rad;
     let exact = Exact {
         result_volume: Some(
-            va + vb - vc - k * (core_h * rad * rad + 4.0 / 3.0 * rad.powi(3)) + swing,
+            va + vb - vc - k * (core_h * rad * rad + 4.0 / 3.0 * rad.ppowi(3)) + swing,
         ),
         result_area: Some(sa + sb - sc - k * (2.0 * core_h * rad + 4.0 * rad * rad) - swing_area),
         ..Default::default()
@@ -4891,7 +4931,7 @@ fn uneven_blend(r: &mut Rng, act: Act) -> FeatureDraw {
     let base = axis_box([0.0; 3], w);
     let full = w[0] * w[1] * w[2];
     let at = |rad: f64| {
-        full - w.iter().map(|l| k * rad * rad * (l - rad)).sum::<f64>() - rad.powi(3) * cube
+        full - w.iter().map(|l| k * rad * rad * (l - rad)).sum::<f64>() - rad.ppowi(3) * cube
     };
     let (lo, hi) = radii
         .iter()
@@ -4937,7 +4977,7 @@ fn uneven_blend(r: &mut Rng, act: Act) -> FeatureDraw {
         _ => (at_one(hi), at_one(lo)),
     };
     let outside = full
-        - side.powi(3)
+        - side.ppowi(3)
         - (0..3)
             .map(|i| k * radii[i] * radii[i] * (w[i] - side))
             .sum::<f64>();
@@ -5019,7 +5059,7 @@ fn offsets(r: &mut Rng) -> FeatureDraw {
                 cone(Frame::at([0.0; 3]), bottom, top, height)
             };
             // The slant moved out by d along its normal, met by the bottom and top moved by d.
-            let len = (bottom - top).hypot(height);
+            let len = (bottom - top).phypot(height);
             let x_at = |y: f64| bottom + (d * len - y * (bottom - top)) / height;
             let pts = [
                 [0.0, -d],
@@ -5164,12 +5204,12 @@ fn drafted_box(r: &mut Rng, closing: bool) -> FeatureDraw {
     let run = |n: f64, len: f64| if n > 0.0 { len / n } else { f64::INFINITY };
     if closing {
         let meet = h * r.range(0.3, 0.8);
-        angle = (run(nx, w).min(run(ny, d)) / meet).atan();
+        angle = (run(nx, w).min(run(ny, d)) / meet).patan();
     }
-    let tau = angle.tan();
+    let tau = angle.ptan();
     let top = h.min(run(nx, w) / tau).min(run(ny, d) / tau);
     let base = axis_box([0.0; 3], [w, d, h]);
-    let (s, c) = angle.sin_cos();
+    let (s, c) = angle.psin_cos();
     let mut want: Shape = base.clone().into();
     let mut points = Vec::new();
     for &i in &sides {
@@ -5204,7 +5244,7 @@ fn drafted_box(r: &mut Rng, closing: bool) -> FeatureDraw {
     }
     let z = top;
     let volume =
-        w * d * z - (w * ny + d * nx) * tau * z * z / 2.0 + nx * ny * tau * tau * z.powi(3) / 3.0;
+        w * d * z - (w * ny + d * nx) * tau * z * z / 2.0 + nx * ny * tau * tau * z.ppowi(3) / 3.0;
     let (w1, d1) = ((w - nx * tau * z).max(0.0), (d - ny * tau * z).max(0.0));
     let x_face = d * z - ny * tau * z * z / 2.0;
     let y_face = w * z - nx * tau * z * z / 2.0;
@@ -5237,7 +5277,7 @@ fn spandrel(x: f64, y: f64, r: f64, sx: f64, sy: f64) -> Profile {
     // The arc's ends on the side along y and on the side along x; the short way between them
     // passes the corner. Corner, then the y side's end, runs counter-clockwise when sx·sy < 0.
     let (on_y, on_x) = ([x, c[1]], [c[0], y]);
-    let (a_y, a_x) = ((0.0f64).atan2(-sx), (-sy).atan2(0.0));
+    let (a_y, a_x) = ((0.0f64).patan2(-sx), (-sy).patan2(0.0));
     let mut turn = a_x - a_y;
     if turn > PI {
         turn -= TAU;
@@ -5337,11 +5377,11 @@ fn hole_rim(r: &mut Rng) -> FeatureDraw {
             angle: TAU,
         };
         let volume = base.volume() - TAU * at * cut;
-        let ring = PI * ((rad + size).powi(2) - rad * rad);
+        let ring = PI * ((rad + size).ppowi(2) - rad * rad);
         let area = base.area() - ring - TAU * rad * size + face;
         let feature = Feature {
             act: blend,
-            points: vec![[c[0] + rad * rim.cos(), c[1] + rad * rim.sin(), t]],
+            points: vec![[c[0] + rad * rim.pcos(), c[1] + rad * rim.psin(), t]],
             size,
             pull: None,
             radii: Vec::new(),
@@ -5391,11 +5431,11 @@ fn hole_rim(r: &mut Rng) -> FeatureDraw {
         angle: TAU,
     };
     let volume = base.volume() + TAU * at * fill;
-    let ring = PI * ((rad + size).powi(2) - rad * rad);
+    let ring = PI * ((rad + size).ppowi(2) - rad * rad);
     let area = base.area() - ring - TAU * rad * size + face;
     let feature = Feature {
         act: blend,
-        points: vec![[rad * rim.cos(), rad * rim.sin(), t]],
+        points: vec![[rad * rim.pcos(), rad * rim.psin(), t]],
         size,
         pull: None,
         radii: Vec::new(),
@@ -5474,7 +5514,7 @@ fn rotate(rot: &[[f64; 3]; 3], v: Vec3) -> Vec3 {
 
 /// The volume two balls of radii `a` and `b` share with their centres `d` apart.
 fn lens(a: f64, b: f64, d: f64) -> f64 {
-    PI * (a + b - d).powi(2) * (d * d + 2.0 * d * (a + b) - 3.0 * (a - b).powi(2)) / (12.0 * d)
+    PI * (a + b - d).ppowi(2) * (d * d + 2.0 * d * (a + b) - 3.0 * (a - b).ppowi(2)) / (12.0 * d)
 }
 
 /// An assembly of 6 to 60 slots 30 mm apart, each turned its own way, holding one part or a pair:
@@ -5507,7 +5547,7 @@ fn assembly(r: &mut Rng) -> Drawn {
     ];
     let mut parts = Vec::new();
     let mut clashes = Vec::new();
-    let side = (slots as f64).cbrt().ceil() as usize;
+    let side = (slots as f64).pcbrt().ceil() as usize;
     for k in 0..slots {
         let c = [
             (k % side) as f64 * 30.0,
@@ -5549,15 +5589,15 @@ fn assembly(r: &mut Rng) -> Drawn {
             }
             5 => pair((1, [0.0; 3]), (1, [3.0, 0.0, 0.0]), 0.0, 0.0),
             6 => {
-                let g = 10f64.powf(r.range(-6.0, -3.0));
+                let g = 10f64.ppowf(r.range(-6.0, -3.0));
                 pair((1, [0.0; 3]), (1, [3.0 + g, 0.0, 0.0]), 0.0, g);
             }
             7 => {
-                let g = 10f64.powf(r.range(-6.0, -3.0));
+                let g = 10f64.ppowf(r.range(-6.0, -3.0));
                 pair((2, [0.0; 3]), (3, [3.5 + g, 0.0, 0.0]), 0.0, g);
             }
             _ => {
-                let g = 10f64.powf(r.range(-6.0, -3.0));
+                let g = 10f64.ppowf(r.range(-6.0, -3.0));
                 pair((1, [0.0; 3]), (2, [-1.5 - g, 1.5, 1.5]), 0.0, g);
             }
         }
@@ -5627,21 +5667,21 @@ fn pattern(r: &mut Rng) -> Drawn {
         _ => {
             let n = [8, 24, 60][size];
             let ring = n as f64 * 0.5;
-            let near = 2.0 * ring * (PI / n as f64).sin();
-            let next = ring * (TAU / n as f64).sin();
+            let near = 2.0 * ring * (PI / n as f64).psin();
+            let next = ring * (TAU / n as f64).psin();
             let p = near / 2.0 + (next - near / 2.0) * r.range(0.2, 0.8);
             let h = r.range(1.0, 4.0);
             let tools = (0..n)
                 .map(|k| {
                     let a = TAU * k as f64 / n as f64;
                     Primitive::Cylinder {
-                        frame: Frame::at([ring * a.cos(), ring * a.sin(), 0.0]),
+                        frame: Frame::at([ring * a.pcos(), ring * a.psin(), 0.0]),
                         radius: p,
                         height: h,
                     }
                 })
                 .collect();
-            let half = (near / (2.0 * p)).acos();
+            let half = (near / (2.0 * p)).pacos();
             let shared = 2.0 * p * p * half - near / 2.0 * (4.0 * p * p - near * near).sqrt();
             let top = n as f64 * (PI * p * p - shared);
             Many {
@@ -5808,7 +5848,7 @@ fn offset_face(r: &mut Rng) -> FeatureDraw {
             };
             (
                 cyl(rad),
-                feature(vec![[rad * 1f64.cos(), rad * 1f64.sin(), h / 2.0]], d),
+                feature(vec![[rad * 1f64.pcos(), rad * 1f64.psin(), h / 2.0]], d),
                 cyl(rad + d).into(),
                 Exact::default(),
             )
@@ -5848,7 +5888,7 @@ fn holed_plate(w: f64, d: f64, h: f64, holes: &[(f64, f64)]) -> Primitive {
 
 /// A point on the side of the hole of radius `r` about `(x, y)`, halfway up `h`.
 fn on_hole(x: f64, y: f64, r: f64, h: f64) -> Vec3 {
-    [x + r * 1f64.cos(), y + r * 1f64.sin(), h / 2.0]
+    [x + r * 1f64.pcos(), y + r * 1f64.psin(), h / 2.0]
 }
 
 /// A `w` × `d` block with a notch `n` deep from `x0` to `x1` in its far side.
@@ -5955,7 +5995,7 @@ fn delete_face(r: &mut Rng) -> FeatureDraw {
                 profile,
                 angle: TAU,
             };
-            let at = |x: f64, z: f64| [x * 1f64.cos(), x * 1f64.sin(), z];
+            let at = |x: f64, z: f64| [x * 1f64.pcos(), x * 1f64.psin(), z];
             let points = vec![
                 at(rad - g, (z0 + z1) / 2.0),
                 at(rad - g / 2.0, z0),
@@ -6038,7 +6078,7 @@ fn move_face(r: &mut Rng) -> FeatureDraw {
             // The side x = w turned by θ about its bottom edge, the line x = w, z = 0 along y: its
             // top edge lands at x = w + h·tan θ. Profiles in the xz plane, extruded toward −y.
             let theta = r.range(-0.3, 0.3);
-            let (c, s) = (theta.cos(), theta.sin());
+            let (c, s) = (theta.pcos(), theta.psin());
             let frame = Frame {
                 origin: [0.0; 3],
                 x: [1.0, 0.0, 0.0],
@@ -6059,7 +6099,7 @@ fn move_face(r: &mut Rng) -> FeatureDraw {
             (
                 quad(w),
                 mv(points, m),
-                quad(w + h * theta.tan()).into(),
+                quad(w + h * theta.ptan()).into(),
                 Exact::default(),
             )
         }
@@ -6115,7 +6155,7 @@ fn thicken_face(r: &mut Rng) -> FeatureDraw {
                 radius: rad,
                 height: h,
             };
-            let point = [rad * 1f64.cos(), rad * 1f64.sin(), h / 2.0];
+            let point = [rad * 1f64.pcos(), rad * 1f64.psin(), h / 2.0];
             (
                 cyl,
                 th(point, t),
@@ -6192,8 +6232,8 @@ fn thicken_face(r: &mut Rng) -> FeatureDraw {
                 minor,
             };
             let point = [
-                (major + minor * 0.6) * 1f64.cos(),
-                (major + minor * 0.6) * 1f64.sin(),
+                (major + minor * 0.6) * 1f64.pcos(),
+                (major + minor * 0.6) * 1f64.psin(),
                 minor * 0.8,
             ];
             (ring, th(point, t), hollow.into(), Exact::default())
@@ -6340,7 +6380,11 @@ fn nearest_in_a_hole(r: &mut Rng) -> Drawn {
             let at = |rho: f64| {
                 at_frame(
                     &f,
-                    [centre[0] + rho * phi.cos(), centre[1] + rho * phi.sin(), z],
+                    [
+                        centre[0] + rho * phi.pcos(),
+                        centre[1] + rho * phi.psin(),
+                        z,
+                    ],
                 )
             };
             (at(rho), radius - rho, Some(at(radius)))
@@ -6475,7 +6519,7 @@ fn ellipse_length(a: f64, b: f64) -> f64 {
     (0..n)
         .map(|k| {
             let t = TAU * k as f64 / n as f64;
-            (a * a * t.sin().powi(2) + b * b * t.cos().powi(2)).sqrt()
+            (a * a * t.psin().ppowi(2) + b * b * t.pcos().ppowi(2)).sqrt()
         })
         .sum::<f64>()
         * TAU
@@ -6506,10 +6550,14 @@ fn section_case(r: &mut Rng) -> Drawn {
         1 => {
             let radius = r.range(0.5, 3.0);
             let phi: f64 = r.range(0.0, 1.0);
-            let half = radius * phi.tan() + r.range(1.0, 3.0);
+            let half = radius * phi.ptan() + r.range(1.0, 3.0);
             let turn = r.range(0.0, TAU);
-            let nl = [phi.sin() * turn.cos(), phi.sin() * turn.sin(), phi.cos()];
-            let (a, b) = (radius / phi.cos(), radius);
+            let nl = [
+                phi.psin() * turn.pcos(),
+                phi.psin() * turn.psin(),
+                phi.pcos(),
+            ];
+            let (a, b) = (radius / phi.pcos(), radius);
             let cyl = Primitive::Cylinder {
                 frame,
                 radius,
@@ -6551,13 +6599,14 @@ fn section_case(r: &mut Rng) -> Drawn {
             let dot = |a: Vec3, b: Vec3| (0..3).map(|k| a[k] * b[k]).sum::<f64>();
             let angle = |q: &Vec3| {
                 let d = [q[0] - c[0], q[1] - c[1], q[2] - c[2]];
-                dot(d, u).atan2(dot(d, v))
+                dot(d, u).patan2(dot(d, v))
             };
             pts.sort_by(|a, b| angle(a).total_cmp(&angle(b)));
             let len = (0..pts.len())
                 .map(|k| {
                     let (a, b) = (pts[k], pts[(k + 1) % pts.len()]);
-                    ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
+                    ((a[0] - b[0]).ppowi(2) + (a[1] - b[1]).ppowi(2) + (a[2] - b[2]).ppowi(2))
+                        .sqrt()
                 })
                 .sum();
             (
@@ -6583,7 +6632,7 @@ fn section_case(r: &mut Rng) -> Drawn {
                 (
                     ring,
                     [0.0; 3],
-                    [turn.cos(), turn.sin(), 0.0],
+                    [turn.pcos(), turn.psin(), 0.0],
                     2,
                     2.0 * TAU * minor,
                     minor,
@@ -6635,7 +6684,7 @@ fn sew_case(r: &mut Rng) -> Drawn {
         .map(|k| {
             let t = TAU * (k as f64 + r.range(-0.3, 0.3)) / n as f64;
             let s = rad * r.range(0.7, 1.0);
-            [s * t.cos(), s * t.sin()]
+            [s * t.pcos(), s * t.psin()]
         })
         .collect();
     let origin = [r.range(-5.0, 5.0), r.range(-5.0, 5.0), r.range(-5.0, 5.0)];
@@ -6781,8 +6830,8 @@ fn surface_points(r: &mut Rng, p: &Primitive) -> Vec<(Vec3, Option<Vec3>)> {
                 let a = r.range(0.0, TAU);
                 let z = height * r.range(0.1, 0.9);
                 (
-                    [radius * a.cos(), radius * a.sin(), z],
-                    Some([a.cos(), a.sin(), 0.0]),
+                    [radius * a.pcos(), radius * a.psin(), z],
+                    Some([a.pcos(), a.psin(), 0.0]),
                 )
             });
             ring(r, 4, &mut |r| {
@@ -6790,7 +6839,7 @@ fn surface_points(r: &mut Rng, p: &Primitive) -> Vec<(Vec3, Option<Vec3>)> {
                 let top = r.next_u64().is_multiple_of(2);
                 let z = if top { height } else { 0.0 };
                 let n = [0.0, 0.0, if top { 1.0 } else { -1.0 }];
-                ([rho * a.cos(), rho * a.sin(), z], Some(n))
+                ([rho * a.pcos(), rho * a.psin(), z], Some(n))
             });
             ring(r, 3, &mut |r| {
                 let a = r.range(0.0, TAU);
@@ -6799,7 +6848,7 @@ fn surface_points(r: &mut Rng, p: &Primitive) -> Vec<(Vec3, Option<Vec3>)> {
                 } else {
                     0.0
                 };
-                ([radius * a.cos(), radius * a.sin(), z], None)
+                ([radius * a.pcos(), radius * a.psin(), z], None)
             });
         }
         Primitive::Sphere { radius, .. } => {
@@ -6811,11 +6860,11 @@ fn surface_points(r: &mut Rng, p: &Primitive) -> Vec<(Vec3, Option<Vec3>)> {
         Primitive::Torus { major, minor, .. } => {
             ring(r, 12, &mut |r| {
                 let (a, b) = (r.range(0.0, TAU), r.range(0.0, TAU));
-                let n = [b.cos() * a.cos(), b.cos() * a.sin(), b.sin()];
+                let n = [b.pcos() * a.pcos(), b.pcos() * a.psin(), b.psin()];
                 let q = [
-                    (major + minor * b.cos()) * a.cos(),
-                    (major + minor * b.cos()) * a.sin(),
-                    minor * b.sin(),
+                    (major + minor * b.pcos()) * a.pcos(),
+                    (major + minor * b.pcos()) * a.psin(),
+                    minor * b.psin(),
                 ];
                 (q, Some(n))
             });
@@ -6829,12 +6878,12 @@ fn surface_points(r: &mut Rng, p: &Primitive) -> Vec<(Vec3, Option<Vec3>)> {
             ring(r, 10, &mut |r| {
                 let (a, t) = (r.range(0.0, TAU), r.range(0.1, 0.9));
                 let rho = bottom + (top - bottom) * t;
-                let n = unit3([a.cos(), a.sin(), (bottom - top) / height]);
-                ([rho * a.cos(), rho * a.sin(), t * height], Some(n))
+                let n = unit3([a.pcos(), a.psin(), (bottom - top) / height]);
+                ([rho * a.pcos(), rho * a.psin(), t * height], Some(n))
             });
             ring(r, 2, &mut |r| {
                 let a = r.range(0.0, TAU);
-                ([bottom * a.cos(), bottom * a.sin(), 0.0], None)
+                ([bottom * a.pcos(), bottom * a.psin(), 0.0], None)
             });
         }
         _ => {}
@@ -6953,7 +7002,7 @@ fn uneven_chamfer(r: &mut Rng) -> FeatureDraw {
     let n = pts.len();
     let i = (r.next_u64() % n as u64) as usize;
     let (prev, at, next) = (pts[(i + n - 1) % n], pts[i], pts[(i + 1) % n]);
-    let len = |a: [f64; 2], b: [f64; 2]| (b[0] - a[0]).hypot(b[1] - a[1]);
+    let len = |a: [f64; 2], b: [f64; 2]| (b[0] - a[0]).phypot(b[1] - a[1]);
     let (la, lb) = (len(prev, at), len(at, next));
     let d1 = la * r.range(0.1, 0.45);
     let mut d2 = lb * r.range(0.1, 0.45);
@@ -7093,7 +7142,7 @@ fn smooth_loft(r: &mut Rng) -> Drawn {
         if k > 0 && k + 1 < n {
             for i in 0..8 {
                 let a = 0.4 + TAU * i as f64 / 8.0;
-                let l = [c[0] + rad * a.cos(), c[1] + rad * a.sin(), h];
+                let l = [c[0] + rad * a.pcos(), c[1] + rad * a.psin(), h];
                 outline.push([0, 1, 2].map(|j| {
                     frame.origin[j] + frame.x[j] * l[0] + frame.y[j] * l[1] + frame.z[j] * l[2]
                 }));
@@ -7116,7 +7165,7 @@ fn smooth_loft(r: &mut Rng) -> Drawn {
     let scans = (0..4)
         .map(|q| {
             let a = 0.3 + TAU * q as f64 / 4.0;
-            let out = [a.cos(), a.sin(), 0.0];
+            let out = [a.pcos(), a.psin(), 0.0];
             Scan {
                 from: world([6.0 * out[0], 6.0 * out[1], top / 2.0]),
                 along: turned([-out[0], -out[1], 0.0]),
@@ -7230,7 +7279,7 @@ fn offset_l_prism(r: &mut Rng) -> FeatureDraw {
         matrix: None,
     };
     let exact = Exact {
-        result_volume: Some(va + vb - vc - k * (h * d * d + 4.0 / 3.0 * d.powi(3))),
+        result_volume: Some(va + vb - vc - k * (h * d * d + 4.0 / 3.0 * d.ppowi(3))),
         result_area: Some(sa + sb - sc - k * (2.0 * h * d + 4.0 * d * d)),
         ..Default::default()
     };
@@ -7576,6 +7625,46 @@ fn invalid_point(r: &mut Rng) -> FeatureDraw {
 mod tests {
     use super::*;
 
+    // Every id of the default seed, as one hash. Every platform must draw these ids; CI runs on
+    // another platform than most development, so a value that hashes differently fails here. A
+    // change that draws other cases updates the hash with its family's version.
+    #[test]
+    fn the_default_seed_draws_the_same_ids_on_every_platform() {
+        let ids: Vec<String> = cases(1).into_iter().map(|c| c.id).collect();
+        let got = format!("{:016x}", fnv(&ids.join("\n")));
+        if got != "4095bb09151ed05f" {
+            // Every id, so a run elsewhere can be compared with this one case by case.
+            for id in &ids {
+                eprintln!("id {id}");
+            }
+        }
+        assert_eq!(got, "4095bb09151ed05f");
+    }
+
+    #[test]
+    fn held_values_hash_the_same_whatever_their_last_bit() {
+        let a = 0.1_f64 + 0.2;
+        let b = f64::from_bits(a.to_bits() + 1);
+        assert_ne!(format!("{a:?}"), format!("{b:?}"));
+        assert_eq!(
+            rounded_floats(&format!("{a:?}")),
+            rounded_floats(&format!("{b:?}"))
+        );
+        assert_eq!(
+            rounded_floats("Clash { i: 3, j: 12, volume: 0.30000000000000004, gap: -1.5e-7 }"),
+            "Clash { i: 3, j: 12, volume: 3.00000000e-1, gap: -1.50000000e-7 }"
+        );
+        assert_eq!(
+            rounded_floats("[[1.0, -2.5], Some(4e3)]"),
+            "[[1.00000000e0, -2.50000000e0], Some(4.00000000e3)]"
+        );
+        // What cancellation leaves of a zero, whatever its sign, is a zero.
+        assert_eq!(
+            rounded_floats("-2.168404344971e-19,1.2e-19,-0.0,0.0"),
+            "0e0,0e0,0e0,0e0"
+        );
+    }
+
     #[test]
     fn a_polygon_spline_round_a_unit_square_holds_one_and_runs_four() {
         let sq = Spline {
@@ -7621,7 +7710,7 @@ mod tests {
         // Two unit spheres with centres 1 apart: the lens is 5π/12 (two caps of height 1/2).
         let (r1, r2, d): (f64, f64, f64) = (1.0, 1.0, 1.0);
         let v = PI
-            * (r1 + r2 - d).powi(2)
+            * (r1 + r2 - d).ppowi(2)
             * (d * d + 2.0 * d * r2 - 3.0 * r2 * r2 + 2.0 * d * r1 + 6.0 * r1 * r2 - 3.0 * r1 * r1)
             / (12.0 * d);
         assert!((v - 5.0 * PI / 12.0).abs() < 1e-12);
