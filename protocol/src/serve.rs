@@ -90,11 +90,18 @@ fn answer<K: Kernel>(
     };
     let made = match req["cmd"].as_str().unwrap_or("") {
         "hello" => {
-            let without = k.unsupported();
-            let supports: Vec<&str> = FUNCTIONS
-                .iter()
-                .copied()
-                .filter(|f| !without.iter().any(|u| u == f))
+            let supports: Vec<String> = k
+                .supports()
+                .into_iter()
+                .filter(|name| {
+                    let known = FUNCTIONS.contains(&name.as_str());
+                    if !known {
+                        eprintln!(
+                            "`supports` lists {name:?}, which is no function of the protocol"
+                        );
+                    }
+                    known
+                })
                 .collect();
             return Ok(json!({
                 "name": k.name(), "version": k.version(), "tolerance": k.tolerance(),
@@ -464,6 +471,9 @@ mod tests {
         fn name(&self) -> String {
             "unchecked".into()
         }
+        fn supports(&self) -> Vec<String> {
+            FUNCTIONS.iter().map(|&f| f.to_string()).collect()
+        }
         fn version(&self) -> String {
             "0".into()
         }
@@ -516,6 +526,60 @@ mod tests {
         );
     }
 
+    /// A kernel that lists two functions it offers, and a name that is no function.
+    struct Listed;
+
+    impl Kernel for Listed {
+        type Solid = ();
+        fn name(&self) -> String {
+            "listed".into()
+        }
+        fn version(&self) -> String {
+            "0".into()
+        }
+        fn tolerance(&self) -> f64 {
+            1e-7
+        }
+        fn supports(&self) -> Vec<String> {
+            ["box", "volume", "fillit"].map(String::from).to_vec()
+        }
+        fn make(&self, _p: &Primitive) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn union(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn intersection(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn difference(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn volume(&self, _s: &()) -> Result<f64, Refusal> {
+            Ok(1.0)
+        }
+        fn area(&self, _s: &()) -> Result<f64, Refusal> {
+            Ok(6.0)
+        }
+        fn check(&self, _s: &()) -> Result<Vec<String>, Refusal> {
+            Ok(Vec::new())
+        }
+    }
+
+    #[test]
+    fn hello_claims_only_the_functions_a_kernel_lists() {
+        // `union`, `area` and the rest have bodies here, but are not listed: they are not
+        // offered. A name that is no function is never claimed.
+        let hello = answer(
+            &Listed,
+            &json!({"cmd": "hello"}),
+            &mut HashMap::new(),
+            &mut 1,
+        );
+        let hello = hello.unwrap_or_else(|e| panic!("{}", e.reason));
+        assert_eq!(hello["supports"], json!(["box", "volume"]));
+    }
+
     /// A kernel that offers nothing beyond what the trait makes it answer.
     struct Bare;
 
@@ -551,8 +615,12 @@ mod tests {
         fn check(&self, _s: &()) -> Result<Vec<String>, Refusal> {
             Ok(Vec::new())
         }
-        fn unsupported(&self) -> Vec<String> {
-            vec!["slab".into(), "sew".into()]
+        fn supports(&self) -> Vec<String> {
+            FUNCTIONS
+                .iter()
+                .filter(|&&f| f != "slab" && f != "sew")
+                .map(|&f| f.to_string())
+                .collect()
         }
     }
 

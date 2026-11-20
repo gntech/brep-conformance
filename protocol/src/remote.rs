@@ -13,9 +13,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 
 use crate::model::{Op, Primitive, Side, Vec3};
-use crate::{
-    Display, DisplayFace, FUNCTIONS, Kernel, Mesh, PROTOCOL_VERSION, Refusal, TimedOut, speaks,
-};
+use crate::{Display, DisplayFace, Kernel, Mesh, PROTOCOL_VERSION, Refusal, TimedOut, speaks};
 
 struct Worker {
     child: Child,
@@ -691,14 +689,8 @@ impl Kernel for Remote {
         }
     }
 
-    fn unsupported(&self) -> Vec<String> {
-        let supports: Vec<String> =
-            serde_json::from_value(self.hello["supports"].clone()).unwrap_or_default();
-        FUNCTIONS
-            .iter()
-            .filter(|&&f| !supports.iter().any(|s| s == f))
-            .map(|&f| String::from(f))
-            .collect()
+    fn supports(&self) -> Vec<String> {
+        serde_json::from_value(self.hello["supports"].clone()).unwrap_or_default()
     }
 
     fn write_step(&self, s: &Handle) -> Result<String, Refusal> {
@@ -777,10 +769,8 @@ mod tests {
         let ours =
             format!(r#"{{"protocol": "{PROTOCOL_VERSION}", "supports": ["box", "volume"]}}"#);
         let k = worker(&ours).unwrap_or_else(|e| panic!("{e}"));
-        // What the worker does not list, of this version's functions, is what it lacks.
-        let lacks = k.unsupported();
-        assert_eq!(lacks.len(), FUNCTIONS.len() - 2);
-        assert!(!lacks.iter().any(|f| f == "box" || f == "volume"));
+        // What the worker lists is what it offers.
+        assert_eq!(k.supports(), ["box", "volume"]);
         for other in [r#"{"protocol": "0.10"}"#, r#"{"protocol": "7.0.0"}"#, "{}"] {
             let refused = worker(other).err().unwrap_or_default();
             assert!(refused.contains("speaks protocol"), "{other}: {refused}");
