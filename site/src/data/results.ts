@@ -26,10 +26,14 @@ export type Result = Grade
 // report names that folder as `assets`; this is for a report written before it did.
 export const ASSET_BASE = 'https://cdn.springcraft.ai/brep-conformance'
 
-// The folder a report's files are in, without its closing slash: null where the run wrote none.
+// Where the dev and preview servers serve BREP_ASSETS_DIR, a local copy of the CDN's folders, under
+// the site's base (vite.config.ts).
+export const LOCAL_ASSETS = 'local-assets'
+
+// The report's folder on the suite's CDN, without its closing slash: null where the run wrote none.
 // A report is its kernel's own word, so `assets` must be the report's own folder on the suite's
 // CDN: no other host, and no other kernel's folder.
-function assetFolder(
+function cdnFolder(
   assets: unknown,
   suite: string,
   kernel: string,
@@ -225,7 +229,8 @@ function adapterOf(v: unknown, at: string): Adapter | null {
   return { repo: str(o, 'repo', at), commit: str(o, 'commit', at) }
 }
 
-export function parseReport(raw: unknown, at = 'report'): Report {
+// `folder` is where the report's files load from in place of its CDN folder, such as a local copy.
+export function parseReport(raw: unknown, at = 'report', folder?: string): Report {
   const o = obj(raw, at)
   const k = obj(o.kernel, `${at}.kernel`)
   const suite = obj(o.suite, `${at}.suite`)
@@ -236,7 +241,8 @@ export function parseReport(raw: unknown, at = 'report'): Report {
   const name = str(k, 'name', `${at}.kernel`)
   const version = str(k, 'version', `${at}.kernel`)
   const suiteVersion = str(suite, 'version', `${at}.suite`)
-  const assetBase = assetFolder(o.assets, suiteVersion, name, version, at)
+  const cdn = cdnFolder(o.assets, suiteVersion, name, version, at)
+  const assetBase = cdn === null ? null : (folder ?? cdn)
   return {
     identity: {
       kernel: name,

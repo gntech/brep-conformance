@@ -97,6 +97,18 @@ describe('parseReport', () => {
     expect([none.methodology.assetBase, none.cases[0]!.glb]).toEqual([null, null])
   })
 
+  it('loads a report’s files from a local copy of its folder, still checking `assets`', () => {
+    const cases = [
+      { ...row('a', 't/x', 'pass', '1e-7'), exports: { glb: 't/x/a.abc.glb', step: [] } },
+    ]
+    const named = { ...raw('k', '2.1', cases), assets: `${ASSET_BASE}/0.9.0/k/2.1/` }
+    const local = '/site/local-assets/0.9.0/k/2.1'
+    expect(parseReport(named).cases[0]!.glb).toBe(`${ASSET_BASE}/0.9.0/k/2.1/t/x/a.abc.glb`)
+    expect(parseReport(named, 'report', local).cases[0]!.glb).toBe(`${local}/t/x/a.abc.glb`)
+    const elsewhere = { ...named, assets: 'https://example.com/k/' }
+    expect(() => parseReport(elsewhere, 'report', local)).toThrow(/report\.assets/)
+  })
+
   it('refuses `assets` that is not the report’s own folder on the suite’s CDN', () => {
     for (const assets of [
       'https://files.example/brep-conformance/0.9.0/k/2.1/',

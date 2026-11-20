@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { kernelInfo, KERNELS } from './kernels'
-import { buildSite, parseReport, type Report, type Site } from './results'
+import { ASSET_BASE, buildSite, LOCAL_ASSETS, parseReport, type Report, type Site } from './results'
 
 // Build-time only: a page's *.data.ts may import this, a *.page.tsx never does.
 
@@ -9,6 +9,18 @@ import { buildSite, parseReport, type Report, type Site } from './results'
 export const REPORTS_DIR = process.env.BREP_REPORTS_DIR
   ? resolve(process.env.BREP_REPORTS_DIR)
   : null
+
+const ASSETS_DIR = process.env.BREP_ASSETS_DIR ? resolve(process.env.BREP_ASSETS_DIR) : null
+
+// The folder a report's files load from: its copy in BREP_ASSETS_DIR, which the dev and preview
+// servers serve, where there is one, and its folder on the CDN where there is not.
+function assetFolder(suite: string, kernel: string, version: string): string {
+  if (ASSETS_DIR && existsSync(join(ASSETS_DIR, suite, kernel, version))) {
+    const base = (process.env.SITE_BASE ?? '/').replace(/\/*$/, '/')
+    return `${base}${LOCAL_ASSETS}/${suite}/${kernel}/${version}`
+  }
+  return `${ASSET_BASE}/${suite}/${kernel}/${version}`
+}
 
 function subdirs(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true })
@@ -44,7 +56,11 @@ export function readReports(dir = REPORTS_DIR, anyKernel = ANY_KERNEL): Report[]
       for (const version of subdirs(join(dir, suite, kernel))) {
         const file = join(dir, suite, kernel, version, 'report.json')
         if (!existsSync(file)) continue
-        const report = parseReport(JSON.parse(readFileSync(file, 'utf8')), file)
+        const report = parseReport(
+          JSON.parse(readFileSync(file, 'utf8')),
+          file,
+          assetFolder(suite, kernel, version),
+        )
         const id = report.identity
         const on = report.methodology.suite
         if (on !== suite || id.kernel !== kernel || id.version !== version)
