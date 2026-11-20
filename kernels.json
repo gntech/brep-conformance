@@ -23,10 +23,10 @@
       "maintained_by_suite": false,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-occt",
-        "commit": "90eeae474f3216b0e12d077203ef207e23219f7a",
+        "commit": "275748416e55dfc8178059ca5b271971381f511b",
         "license": "MIT",
-        "build": ["uv sync -q --frozen --project ."],
-        "run": "{dir}/.venv/bin/python -I {dir}/adapter.py"
+        "build": ["./build.sh"],
+        "run": "{dir}/build/occt-adapter"
       },
       "reviewers": []
     },
