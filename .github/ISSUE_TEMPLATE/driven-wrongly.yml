@@ -14,7 +14,9 @@ body:
       label: Kernel
       options:
         - arris
+        - cad-kernel
         - cadrs
+        - next.BREP
         - opencascade
         - solidcore
         - springrep
