@@ -145,6 +145,7 @@ pub fn main() -> ExitCode {
             .as_ref()
             .map(|f| f as &(dyn Fn() -> Result<Remote, String> + Sync)),
         &exports,
+        Some(limit),
     );
     let mut results = match run {
         Ok(results) => results,
