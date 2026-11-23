@@ -1,6 +1,21 @@
 {
   "kernels": [
     {
+      "kernel": "anvil-brep",
+      "version": "0.2.0",
+      "license": "MIT OR Apache-2.0",
+      "source": "https://github.com/swperb/anvilcad",
+      "maintained_by_suite": false,
+      "adapter": {
+        "repo": "https://github.com/gntech/brep-conformance-anvilcad",
+        "commit": "68907b3696ada3163136393663cab6288f604d1f",
+        "license": "MIT",
+        "build": ["cargo build --release --locked"],
+        "run": "{dir}/target/release/anvilcad-adapter"
+      },
+      "reviewers": []
+    },
+    {
       "kernel": "arris",
       "version": "0.10.0",
       "license": "MIT OR Apache-2.0",
