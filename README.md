@@ -21,7 +21,8 @@ per contract clause. It is not run on every pull request: it runs in release, by
 - The suite's adapters each have their own repository, and [`kernels.json`](kernels.json), the
   registry, pins each to a reviewed commit and one release of its kernel:
   [OpenCascade](https://github.com/springcraft-ai/brep-conformance-occt), in C++, and the Rust
-  kernels [arris](https://github.com/springcraft-ai/brep-conformance-arris),
+  kernels [anvil-brep](https://github.com/gntech/brep-conformance-anvilcad),
+  [arris](https://github.com/springcraft-ai/brep-conformance-arris),
   [cad-kernel](https://github.com/springcraft-ai/brep-conformance-cad-kernel),
   [cadrs](https://github.com/springcraft-ai/brep-conformance-cadrs),
   [kentron](https://github.com/rsz269/brep-conformance-kentron),

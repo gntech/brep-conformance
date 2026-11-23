@@ -221,6 +221,7 @@ mod tests {
         assert_eq!(
             names,
             [
+                "anvil-brep",
                 "arris",
                 "cad-kernel",
                 "cadrs",
